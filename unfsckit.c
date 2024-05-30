@@ -201,6 +201,8 @@ int main(void) {
             /* TODO: continue to track the timing offset */
         }
 
+        if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
+
         const float value_parity = argmax_of_fft_of_dechirped(NULL, S, L, fft_output, fft_input, plan, history, ih, advances, icarrier, 0) - residual;
         if (value_parity >= FLT_MAX) break;
         const unsigned parity_received = lrintf(value_parity + S) % S;
