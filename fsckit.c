@@ -89,6 +89,9 @@ int main(void) {
     for (size_t id = 0; id < D; id++)
         carrier = emit_sweep(carrier, T, advances, data_symbols[id] * L, 0);
 
+    /* one upsweep for checksum (lowest bits of djb2 of data symbols) */
+    carrier = emit_sweep(carrier, T, advances, (hash & (S - 1U)) * L, 0);
+
     for (size_t ioffset = 0; ioffset < T; ioffset++)
         fwrite(&(float complex) { 0 }, sizeof(float complex), 1, stdout);
 
