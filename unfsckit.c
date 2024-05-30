@@ -1,3 +1,4 @@
+/* minimum viable usage: ./fsckit | ./baseband | ./unfsckit */
 #include "fft_anywhere.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -105,6 +106,8 @@ int main(void) {
         advance = renormalize(advance * advance_advance);
     }
 
+    /* writer and reader cursors for input ring buffer. the reader shifts its own cursor
+     around during preamble detection to align with symbol frames */
     size_t ih = 0, ih_next_frame = S * L;
 
     /* outermost loop repeats once per packet */
