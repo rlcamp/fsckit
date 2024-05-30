@@ -22,6 +22,35 @@ static float complex renormalize(const float complex x) {
     /* assuming x is already near unity, renormalize to unity w/o div or sqrt */
     return x * (3.0f - cmagsquaredf(x)) * 0.5f;
 }
+
+static float circular_argmax_of_complex_vector(float * max_magsquared_p, const size_t S,
+                                               const float complex s[restrict static S]) {
+    float max = 0;
+    size_t is_max = 0;
+    for (size_t is = 0; is < S; is++) {
+        const float this = cmagsquaredf(s[is]);
+        if (this > max) {
+            max = this;
+            is_max = is;
+        }
+    }
+
+    if (!max) return FLT_MAX;
+
+    /* TODO: use three-point exact dft expr instead of quadratic fit to log of magsquared */
+    const float one_over_this = 1.0f / max;
+    const float prev = cmagsquaredf(s[(is_max + S - 1) % S]);
+    const float next = cmagsquaredf(s[(is_max + 1) % S]);
+
+    /* actual logf is expensive, use a fast approx that is good enough for the use case */
+    const float alpha = logf_good_enough_approx(prev * one_over_this);
+    const float gamma = logf_good_enough_approx(next * one_over_this);
+    const float p = 0.5f * (alpha - gamma) / (alpha + gamma);
+
+    if (max_magsquared_p) *max_magsquared_p = max;
+    return is_max + p;
+}
+
 static float argmax_of_fft_of_dechirped(float * power_max_p,
                                         const size_t S, const size_t L,
                                         float complex fft_output[restrict static S],
@@ -31,6 +60,7 @@ static float argmax_of_fft_of_dechirped(float * power_max_p,
                                         const size_t ih,
                                         const float complex advances[restrict static S * L],
                                         const int down) {
+    /* extract critically sampled values from history, and multiply by conjugate of chirp */
     float complex carrier = 1.0f;
 
     for (size_t is = 0; is < S; is++) {
@@ -41,30 +71,7 @@ static float argmax_of_fft_of_dechirped(float * power_max_p,
 
     fft_evaluate_forward(fft_output, fft_input, plan);
 
-    float max = 0;
-    size_t iw_max = 0;
-    for (size_t iw = 0; iw < S; iw++) {
-        const float this = cmagsquaredf(fft_output[iw]);
-        if (this > max) {
-            max = this;
-            iw_max = iw;
-        }
-    }
-
-    if (!max) return FLT_MAX;
-
-    /* TODO: use exact phase expressions instead of quadratic fit in magnitude squared */
-    const float one_over_this = 1.0f / max;
-    const float prev = cmagsquaredf(fft_output[(iw_max + S - 1) % S]);
-    const float next = cmagsquaredf(fft_output[(iw_max + 1) % S]);
-
-    /* actual logf is expensive, use a fast approx that is good enough for the use case */
-    const float alpha = logf_good_enough_approx(prev * one_over_this);
-    const float gamma = logf_good_enough_approx(next * one_over_this);
-    const float p = 0.5f * (alpha - gamma) / (alpha + gamma);
-
-    if (power_max_p) *power_max_p = max;
-    return iw_max + p;
+    return circular_argmax_of_complex_vector(power_max_p, S, fft_output);
 }
 
 static int wait_for_frame(size_t * ih_p, size_t * ih_next_frame_p, const size_t S,
