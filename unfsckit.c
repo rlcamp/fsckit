@@ -67,8 +67,10 @@ static float argmax_of_fft_of_dechirped(float * power_max_p,
 }
 
 static int wait_for_frame(size_t * ih_p, size_t * ih_next_frame_p, const size_t S,
-                          const size_t L,
-                          float complex history[restrict static S * L]) {
+                          const size_t L, float complex history[restrict static S * L]) {
+    /* this function ingests new samples, filling a ring buffer long enough to hold one
+     sweep at the intermediate (not necessarily critically sampled) sample rate, and returns
+     when the buffer is aligned with the next expected frame */
     while (*ih_p != *ih_next_frame_p) {
         float complex input;
         if (fread(&input, sizeof(float complex), 1, stdin) <= 0) return -1;
@@ -83,6 +85,10 @@ int main(void) {
     const size_t S = 1U << bits_per_sweep; /* number of unique measurable symbols */
     /* critically sampled also means there are S complex samples of the band per symbol */
 
+    /* optional intermediate oversampling factor. must be a power of 2, but can be 1. using
+     a value larger than 1 allows finer time alignment of the input to the demodulator, at
+     the expense of more sram usage (but not more computational load). the demodulator
+     itself always runs at the critical sampling rate s.t the chirps exactly wrap around */
     const size_t L = 2;
     struct planned_forward_fft * plan = plan_forward_fft_of_length(S);
     float complex * restrict const history = malloc(sizeof(float complex) * S * L);
@@ -90,10 +96,10 @@ int main(void) {
     float complex * restrict const fft_output = malloc(sizeof(float complex) * S);
     float complex * restrict const advances = malloc(sizeof(float complex) * S * L);
 
-    /* assume critically sampled s.t. advance exactly wraps around */
+    /* construct a lookup table of the S*L roots of unity we need for dechirping the input.
+     these will be uniformly spaced about the unit circle starting at -1 on the real axis */
     float complex advance = -1.0f;
     const float complex advance_advance = cexpf(I * 2.0f * (float)M_PI / (S * L));
-
     for (size_t isl = 0; isl < S * L; isl++) {
         advances[isl] = advance;
         advance = renormalize(advance * advance_advance);
