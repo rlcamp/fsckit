@@ -29,13 +29,13 @@ static float argmax_of_fft_of_dechirped(float * power_max_p,
                                         const float complex history[restrict static S * L],
                                         const size_t ih,
                                         const float complex advances[restrict static S * L],
-                                        const int icarrier, const int down) {
+                                        const int down) {
     float complex carrier = 1.0f;
 
     for (size_t is = 0; is < S; is++) {
         /* TODO: document this indexing math wow */
         fft_input[is] = history[(is * L + ih) % (S * L)] * (down ? carrier : conjf(carrier));
-        carrier = renormalize(carrier * advances[(is * L + icarrier + S * L + 1) % (S * L)]);
+        carrier = renormalize(carrier * advances[(is * L + S * L + 1) % (S * L)]);
     }
 
     fft_evaluate_forward(fft_output, fft_input, plan);
@@ -105,7 +105,6 @@ int main(void) {
         advance = renormalize(advance * advance_advance);
     }
 
-    int icarrier = 0;
     size_t ih = 0, ih_next_frame = S * L;
 
     /* outermost loop repeats once per packet */
@@ -124,10 +123,10 @@ int main(void) {
 
                 float power_up = 0, power_dn = 0;
                 /* always listen for upsweeps in this state */
-                const float value_up = argmax_of_fft_of_dechirped(&power_up, S, L, fft_output, fft_input, plan, history, ih, advances, icarrier, 0);
+                const float value_up = argmax_of_fft_of_dechirped(&power_up, S, L, fft_output, fft_input, plan, history, ih, advances, 0);
 
                 /* if three or more upsweeps have been detected, also listen for downsweeps */
-                const float value_dn = upsweeps >= 3 ? (argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, icarrier, 1)) : FLT_MAX;
+                const float value_dn = upsweeps >= 3 ? (argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1)) : FLT_MAX;
 
                 fprintf(stderr, "%s: %g %g\n", __func__, power_up, power_dn);
 
@@ -190,7 +189,7 @@ int main(void) {
         /* next symbol encodes the frame length */
         if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
 
-        const float value_header = argmax_of_fft_of_dechirped(NULL, S, L, fft_output, fft_input, plan, history, ih, advances, icarrier, 0) - residual;
+        const float value_header = argmax_of_fft_of_dechirped(NULL, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
         if (value_header >= FLT_MAX) break;
         const size_t data_symbols_expected = (lrintf(value_header + 2 * S) % S) + 1;
 
@@ -203,7 +202,7 @@ int main(void) {
         for (size_t idata = 0; idata < data_symbols_expected; idata++) {
             if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
 
-            const float value = argmax_of_fft_of_dechirped(NULL, S, L, fft_output, fft_input, plan, history, ih, advances, icarrier, 0) - residual;
+            const float value = argmax_of_fft_of_dechirped(NULL, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
             if (value >= FLT_MAX) break;
 
             const unsigned symbol = lrintf(value + 2 * S) % S;
@@ -218,7 +217,7 @@ int main(void) {
 
         if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
 
-        const float value_parity = argmax_of_fft_of_dechirped(NULL, S, L, fft_output, fft_input, plan, history, ih, advances, icarrier, 0) - residual;
+        const float value_parity = argmax_of_fft_of_dechirped(NULL, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
         if (value_parity >= FLT_MAX) break;
         const unsigned parity_received = lrintf(value_parity + S) % S;
 
