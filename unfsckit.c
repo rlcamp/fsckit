@@ -26,8 +26,8 @@ static float argmax_of_fft_of_dechirped(float * power_max_p,
     float complex carrier = 1.0f;
 
     for (size_t is = 0; is < S; is++) {
+        /* TODO: document this indexing math wow */
         fft_input[is] = history[(is * L + ih) % (S * L)] * (down ? carrier : conjf(carrier));
-
         carrier = renormalize(carrier * advances[(is * L + icarrier + S * L + 1) % (S * L)]);
     }
 
@@ -94,11 +94,14 @@ int main(void) {
     int icarrier = 0;
     size_t ih = 0, ih_next_frame = S * L;
 
+    /* outermost loop repeats once per packet */
     while (1) {
-        char eof = 0;
+        /* after preamble detection, this will hold a residual (circular) shift, in units
+         of bins, that should be applied to the fft argmax to get the encoded value */
         float residual = 0;
 
         {
+            char eof = 0;
             size_t upsweeps = 0, downsweeps = 0;
 
             /* loop until expected sequence of upsweeps and downsweeps has been seen */
@@ -127,6 +130,8 @@ int main(void) {
                         upsweeps = 1;
                     else {
                         upsweeps++;
+                        /* TODO: do a running average of the residual over all preamble
+                         upsweeps instead of just using the most recent value */
                         residual = value_up_wrapped;
                     }
 
@@ -134,11 +139,8 @@ int main(void) {
 
                     if (fabsf(value_up_wrapped) >= 0.5f / L) {
                         /* got an upsweep that does not agree with anything previously */
-#if 1
                         fprintf(stderr, "%s: shifting by %ld\n", __func__, lrintf(value_up_wrapped * L));
-
                         ih_next_frame -= lrintf(value_up_wrapped * L);
-#endif
                     }
                 } else if (upsweeps >= 3) {
                     const float value_dn_wrapped = value_dn >= S / 2 ? value_dn - S : value_dn;
@@ -149,7 +151,7 @@ int main(void) {
                         fprintf(stderr, "%s: downsweep detected at %g + %g = %g\n", __func__, value_dn_wrapped, residual, value_dn_wrapped + residual);
 
                         if (2 == downsweeps) {
-                            /* TODO: the value detected here allows us to disambiguate between
+                            /* the value detected here allows us to disambiguate between
                              timing error and carrier offset error, and correct both */
 
                             const float shift_unquantized = 0.5f * (value_dn_wrapped + residual) * L;
