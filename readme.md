@@ -1,12 +1,12 @@
 # fsckit/unfsckit
 
-This is a work-in-progress, proof-of-concept digital modulation loosely inspired by LoRa[^1], which has some properties desirable for acoustic comms over unreliable channels. Care will need to be taken to ensure that we do not violate the LoRa patent if using anything similar to this for anything important. There is lots of relevant stuff in the academic literature describing how to time-align LoRa. I have not read the LoRa patent itself.
+This is a work-in-progress, proof-of-concept digital modulation loosely inspired by LoRa[1], which has some properties desirable for acoustic comms over unreliable channels. Care will need to be taken to ensure that we do not violate the LoRa patent if using anything similar to this for anything important. There is lots of relevant stuff in the academic literature describing how to time-align LoRa. I have not read the LoRa patent itself.
 
 ## Concepts
 
 ### Frequency-shifted chirp keying
 
-The basic concept is identical to multiple-frequency-shift-keying (MFSK) with an additional linearly-increasing-with-wraparound component to the transmitted waveform. Each message starts with a preamble consisting of 2 or more upsweeps followed by 2 downsweeps, allowing the receiver to detect the beginning of a message and simulateously disambiguate timing and carrier frequency offset[^2].
+The basic concept is identical to multiple-frequency-shift-keying (MFSK) with an additional linearly-increasing-with-wraparound component to the transmitted waveform. Each message starts with a preamble consisting of 2 or more upsweeps followed by 2 downsweeps, allowing the receiver to detect the beginning of a message and simulateously disambiguate timing and carrier frequency offset[2].
 
 Adding the chirped component to MFSK modulation also ensures that all symbols equally sweep the entire passband, providing resilience against non-flat responses in the transmitter, propagation channel, and/or receiver.
 
@@ -30,6 +30,6 @@ This modulation falls under the category of "spread spectrum" techniques in that
 
 ### References
 
-[^1] L. Vangelista, "Frequency shift chirp modulation: The LoRa modulation," IEEE Signal Processing Letters, vol. 24, no. 12, pp. 1818–1821, Dec 2017.
+[1] L. Vangelista, "Frequency shift chirp modulation: The LoRa modulation," IEEE Signal Processing Letters, vol. 24, no. 12, pp. 1818–1821, Dec 2017.
 
-[^2] C. Bernier, F. Dehmas and N. Deparis, "Low Complexity LoRa Frame Synchronization for Ultra-Low Power Software-Defined Radios," in IEEE Transactions on Communications, vol. 68, no. 5, pp. 3140-3152, May 2020, doi: 10.1109/TCOMM.2020.2974464 https://cea.hal.science/cea-02280910/file/TCOM.pdf
+[2] C. Bernier, F. Dehmas and N. Deparis, "Low Complexity LoRa Frame Synchronization for Ultra-Low Power Software-Defined Radios," in IEEE Transactions on Communications, vol. 68, no. 5, pp. 3140-3152, May 2020, doi: 10.1109/TCOMM.2020.2974464 https://cea.hal.science/cea-02280910/file/TCOM.pdf
