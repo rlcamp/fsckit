@@ -206,4 +206,10 @@ int main(void) {
         fprintf(stderr, "%s: parity received %u, calculated %u, %s\n", __func__,
                 parity_received, parity_calculated, parity_received == parity_calculated ? "pass" : "fail");
     }
+
+    destroy_planned_forward_fft(plan);
+    free(advances);
+    free(fft_output);
+    free(fft_input);
+    free(history);
 }
