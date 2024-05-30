@@ -1,0 +1,5 @@
+*.o
+fft_anywhere.*
+baseband
+fsckit
+unfsckit
