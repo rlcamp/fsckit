@@ -40,10 +40,10 @@ int main(void) {
     const size_t D = sizeof(data_symbols) / sizeof(data_symbols[0]);
     assert(D <= S);
 
-    /* do a simple xor of all the data symbols. TODO: better checksum */
-    unsigned parity_symbol = 0;
+    /* djb2 */
+    unsigned hash = 5381;
     for (size_t id = 0; id < D; id++)
-        parity_symbol ^= data_symbols[id];
+        hash = hash * 33U + data_symbols[id];
 
     /* oversampling factor, must be an integer for now */
     const size_t L = lrintf(fs / bw);

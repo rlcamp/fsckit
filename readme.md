@@ -24,8 +24,6 @@ This modulation falls under the category of "spread spectrum" techniques in that
 
 - Figure out what is covered by the patent and make sure we are in the clear
 
-- Add a more robust checksum to the end of each data frame. A simple xor of all of the data symbols yields a parity symbol that has often been corrupted in the same way as the data symbols, making it quite unreliable for use as a checksum.
-
 - Add some forward error correction. LoRa uses one of several very simple Hamming codes. We can probably do better (and may be forced to in order to not step on the patent) but bear in mind this needs to work on a microcontroller with almost no available memory. Techniques which rely on a Fourier transform as the primitive would be convenient, as the demodulator already uses one.
 
 ### References

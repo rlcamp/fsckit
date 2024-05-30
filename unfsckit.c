@@ -182,7 +182,8 @@ int main(void) {
 
         fprintf(stderr, "%s: reading %.2f + 1 -> %zu values\n", __func__, value_header, data_symbols_expected);
 
-        unsigned parity_calculated = 0;
+        /* initial value for djb2 checksum */
+        unsigned hash = 5381;
 
         /* remaining symbols encode the data */
         for (size_t idata = 0; idata < data_symbols_expected; idata++) {
@@ -193,8 +194,8 @@ int main(void) {
 
             const unsigned symbol = lrintf(value + 2 * S) % S;
 
-            /* TODO: checksum that isn't absolutely worthless */
-            parity_calculated ^= symbol;
+            /* update djb2 hash of data symbols */
+            hash = hash * 33U + symbol;
 
             fprintf(stderr, "%s: data symbol %zu/%zu: %.2f - %.2f = %.2f -> %u\n", __func__, idata, data_symbols_expected, value + residual, residual, value, symbol);
 
@@ -207,7 +208,11 @@ int main(void) {
         if (value_parity >= FLT_MAX) break;
         const unsigned parity_received = lrintf(value_parity + S) % S;
 
-        fprintf(stderr, "%s: parity received %u, calculated %u, %s\n", __func__,
+        /* use low bits of djb2 hash as checksum */
+        const unsigned parity_calculated = hash & (S - 1U);
+
+        fprintf(stderr, "%s: parity received %.2f - %.2f = %.2f -> %u, calculated %u, %s\n", __func__,
+                value_parity + residual, residual, value_parity,
                 parity_received, parity_calculated, parity_received == parity_calculated ? "pass" : "fail");
     }
 
