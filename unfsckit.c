@@ -146,6 +146,14 @@ int main(void) {
                     /* got an upsweep */
                     downsweeps = 0;
 
+                    fprintf(stderr, "%s: upsweep detected at %g, total now %zu\n",
+                            __func__, value_up_wrapped, upsweeps);
+
+                    const float shift_unquantized = value_up_wrapped * L;
+                    const int shift = lrintf(shift_unquantized);
+                    if (shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
+                    ih_next_frame -= shift;
+
                     if (fabsf(value_up_wrapped) >= 0.5f)
                         upsweeps = 1;
                     else {
@@ -153,15 +161,6 @@ int main(void) {
                         /* TODO: do a running average of the residual over all preamble
                          upsweeps instead of just using the most recent value */
                         residual = value_up_wrapped;
-                    }
-
-                    fprintf(stderr, "%s: upsweep detected at %g, total now %zu\n",
-                            __func__, value_up_wrapped, upsweeps);
-
-                    if (fabsf(value_up_wrapped) >= 0.5f / L) {
-                        /* got an upsweep that does not agree with anything previously */
-                        fprintf(stderr, "%s: shifting by %ld\n", __func__, lrintf(value_up_wrapped * L));
-                        ih_next_frame -= lrintf(value_up_wrapped * L);
                     }
                 } else if (upsweeps >= 2) {
                     const float value_dn_wrapped = value_dn >= S / 2 ? value_dn - S : value_dn;
