@@ -153,10 +153,8 @@ int main(void) {
     /* compute filter coefficients for eight-pole butterworth biquad cascade */
     float num[4][3], den[4][3];
     butterworth_biquads(num, den, 4, sample_rate, 0.75f * bandwidth);
-    float complex vprev[4][2] = { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } };
 
     const float input_samples_per_filtered_sample = sample_rate / sample_rate_filtered;
-    float input_samples_since_filtered_sample = 0;
 
     struct planned_forward_fft * plan = plan_forward_fft_of_length(S);
     float complex * restrict const history = malloc(sizeof(float complex) * S * L);
@@ -165,6 +163,12 @@ int main(void) {
     float complex * restrict const advances = malloc(sizeof(float complex) * S * L);
 
     populate_advances(S * L, advances);
+
+    /* biquad cascade filter state */
+    float complex vprev[4][2] = { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } };
+
+    /* decimator state */
+    float input_samples_since_filtered_sample = 0;
 
     /* index of what stage of the state machine we are in, so that we can structure this
      as a simple nonthreatening function call from the perspective of calling code */
