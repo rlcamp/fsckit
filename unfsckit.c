@@ -74,6 +74,17 @@ static float argmax_of_fft_of_dechirped(float * power_max_p,
     return circular_argmax_of_complex_vector(power_max_p, S, fft_output);
 }
 
+static void populate_advances(const size_t SL, float complex advances[restrict static SL]) {
+    /* construct a lookup table of the S*L roots of unity we need for dechirping the input.
+     these will be uniformly spaced about the unit circle starting at -1 on the real axis */
+    float complex advance = -1.0f;
+    const float complex advance_advance = cexpf(I * 2.0f * (float)M_PI / SL);
+    for (size_t isl = 0; isl < SL; isl++) {
+        advances[isl] = advance;
+        advance = renormalize(advance * advance_advance);
+    }
+}
+
 int main(void) {
     const unsigned bits_per_sweep = 5;
     const size_t S = 1U << bits_per_sweep; /* number of unique measurable symbols */
@@ -90,14 +101,7 @@ int main(void) {
     float complex * restrict const fft_output = malloc(sizeof(float complex) * S);
     float complex * restrict const advances = malloc(sizeof(float complex) * S * L);
 
-    /* construct a lookup table of the S*L roots of unity we need for dechirping the input.
-     these will be uniformly spaced about the unit circle starting at -1 on the real axis */
-    float complex advance = -1.0f;
-    const float complex advance_advance = cexpf(I * 2.0f * (float)M_PI / (S * L));
-    for (size_t isl = 0; isl < S * L; isl++) {
-        advances[isl] = advance;
-        advance = renormalize(advance * advance_advance);
-    }
+    populate_advances(S * L, advances);
 
     /* index of what stage of the state machine we are in, so that we can structure this
      as a simple nonthreatening function call from the perspective of calling code */
