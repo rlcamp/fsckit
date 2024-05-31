@@ -113,102 +113,99 @@ int main(void) {
         advance = renormalize(advance * advance_advance);
     }
 
+    /* index of what stage of the state machine we are in, so that we can structure this
+     as a simple nonthreatening function call from the perspective of calling code */
+    unsigned char state = 0;
+
     /* writer and reader cursors for input ring buffer. the reader shifts its own cursor
      around during preamble detection to align with symbol frames */
     size_t ih = 0, ih_next_frame = S * L;
 
-    /* outermost loop repeats once per packet */
+    /* after preamble detection, this will hold a residual (circular) shift, in units
+     of bins, that should be applied to the fft argmax to get the encoded value */
+    float residual = 0;
+
+    /* counters needed by preamble state */
+    size_t upsweeps = 0, downsweeps = 0;
+
+    /* counters needed by data states */
+    size_t data_symbols_expected = 0, idata = 0;
+
+    /* this will be (re)initialized and then updated as each data symbol comes in */
+    unsigned hash;
+
+    /* loop over nominally non-overlapped fft frames */
     while (1) {
-        /* after preamble detection, this will hold a residual (circular) shift, in units
-         of bins, that should be applied to the fft argmax to get the encoded value */
-        float residual = 0;
+        if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
 
-        {
-            char eof = 0;
-            size_t upsweeps = 0, downsweeps = 0;
+        float power = 0;
+        const float value = remainderf(argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual, S);
+        if (!power) continue;
 
-            /* loop until expected sequence of upsweeps and downsweeps has been seen */
-            while (1) {
-                if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) { eof = 1; break; }
+        /* if listening for preamble... */
+        if (0 == state) {
+            /* if two or more agreeing upsweeps have been detected, also listen for downsweeps */
+            float power_dn = 0;
+            const float value_dn = upsweeps >= 2 ? remainderf(argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1) + residual, S) : FLT_MAX;
 
-                float power = 0, power_dn = 0;
-                /* always listen for upsweeps in this state */
-                const float value = remainderf(argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual, S);
+            /* if we got neither, just keep trying */
+            if (!power && !power_dn) continue;
 
-                /* if two or more agreeing upsweeps have been detected, also listen for downsweeps */
-                const float value_dn = upsweeps >= 2 ? remainderf(argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1) + residual, S) : FLT_MAX;
+            if (power >= 2.0f * power_dn) {
+                /* got an upsweep */
+                downsweeps = 0;
 
-                /* if we got neither, just keep trying */
-                if (!power && !power_dn) continue;
+                fprintf(stderr, "%s: upsweep detected at %g, total now %zu\n",
+                        __func__, value, upsweeps);
 
-                if (power >= 2.0f * power_dn) {
-                    /* got an upsweep */
-                    downsweeps = 0;
+                const float shift_unquantized = value * L;
+                const int shift = lrintf(shift_unquantized);
+                if (shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
+                ih_next_frame -= shift;
+                residual += (shift_unquantized - shift) / L;
 
-                    fprintf(stderr, "%s: upsweep detected at %g, total now %zu\n",
-                            __func__, value, upsweeps);
+                if (fabsf(value) >= 0.5f)
+                    upsweeps = 1;
+                else {
+                    upsweeps++;
+                    /* TODO: do a running average of the residual over all preamble
+                     upsweeps instead of just using the most recent value */
+                }
+            } else if (upsweeps >= 2) {
+                /* got a downsweep */
+                if (fabsf(value_dn) < 0.5f * S) {
+                    downsweeps++;
+                    fprintf(stderr, "%s: downsweep detected at %g + %g = %g\n",__func__,
+                            value_dn - residual, residual, value_dn);
 
-                    const float shift_unquantized = value * L;
-                    const int shift = lrintf(shift_unquantized);
-                    if (shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
-                    ih_next_frame -= shift;
-                    residual += (shift_unquantized - shift) / L;
+                    if (2 == downsweeps) {
+                        /* the value detected here allows us to disambiguate between
+                         timing error and carrier offset error, and correct both */
 
-                    if (fabsf(value) >= 0.5f)
-                        upsweeps = 1;
-                    else {
-                        upsweeps++;
-                        /* TODO: do a running average of the residual over all preamble
-                         upsweeps instead of just using the most recent value */
-                    }
-                } else if (upsweeps >= 2) {
-                    /* got a downsweep */
-                    if (fabsf(value_dn) < 0.5f * S) {
-                        downsweeps++;
-                        fprintf(stderr, "%s: downsweep detected at %g + %g = %g\n",__func__,
-                                value_dn - residual, residual, value_dn);
+                        const float shift_unquantized = 0.5f * value_dn * L;
+                        const int shift = lrintf(shift_unquantized);
 
-                        if (2 == downsweeps) {
-                            /* the value detected here allows us to disambiguate between
-                             timing error and carrier offset error, and correct both */
+                        ih_next_frame += shift;
+                        residual += (float)shift / L;
 
-                            const float shift_unquantized = 0.5f * value_dn * L;
-                            const int shift = lrintf(shift_unquantized);
+                        fprintf(stderr, "%s: shifted by %d, residual is %g\n", __func__,
+                                shift, residual);
 
-                            ih_next_frame += shift;
-                            residual += (float)shift / L;
-
-                            fprintf(stderr, "%s: shifted by %d, residual is %g\n", __func__,
-                                    shift, residual);
-
-                            break;
-                        }
+                        state++;
                     }
                 }
             }
-
-            if (eof) break;
-        }
-
-        unsigned char state = 1;
-        size_t data_symbols_expected = 0, idata = 0;
-
-        /* initial value for djb2 checksum */
-        unsigned hash = 5381;
-
-        while (1) {
-            if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
-
-            float power = 0;
-            const float value = remainderf(argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual, S);
-            if (!power) break;
-
+        } else {
             const unsigned symbol = (lrintf(value + S)) % S;
             fprintf(stderr, "%s: %.2f - %.2f = %.2f -> %u\n", __func__, value + residual, residual, value, symbol);
 
             if (1 == state) {
                 data_symbols_expected = symbol + 1;
                 fprintf(stderr, "%s: reading %.2f + 1 -> %zu values\n", __func__, value, data_symbols_expected);
+
+                /* initial value for djb2 checksum */
+                hash = 5381;
+                idata = 0;
                 state++;
             }
             else if (2 == state) {
@@ -228,7 +225,11 @@ int main(void) {
 
                 fprintf(stderr, "%s: parity received: %u, calculated %u, %s\n", __func__,
                         parity_received, parity_calculated, parity_received == parity_calculated ? "pass" : "fail");
-                break;
+
+                /* reset and wait for next packet */
+                state = 0;
+                upsweeps = 0;
+                downsweeps = 0;
             }
         }
     }
