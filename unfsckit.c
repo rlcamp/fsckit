@@ -35,6 +35,7 @@ static float circular_argmax_of_complex_vector(float * max_magsquared_p, const s
         }
     }
 
+    if (max_magsquared_p) *max_magsquared_p = max;
     if (!max) return FLT_MAX;
 
     /* TODO: use three-point exact dft expr instead of quadratic fit to log of magsquared */
@@ -47,7 +48,6 @@ static float circular_argmax_of_complex_vector(float * max_magsquared_p, const s
     const float gamma = logf_good_enough_approx(next * one_over_this);
     const float p = 0.5f * (alpha - gamma) / (alpha + gamma);
 
-    if (max_magsquared_p) *max_magsquared_p = max;
     return is_max + p;
 }
 
@@ -139,7 +139,7 @@ int main(void) {
                 const float value_dn = upsweeps >= 2 ? (argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1) + residual) : FLT_MAX;
 
                 /* if we got neither, just keep trying */
-                if (value_up >= FLT_MAX && value_dn >= FLT_MAX) continue;
+                if (!power_up && !power_dn) continue;
 
                 if (power_up >= 2.0f * power_dn) {
                     const float value_up_wrapped = value_up >= S / 2 ? value_up - S : value_up;
@@ -192,11 +192,13 @@ int main(void) {
             if (eof) break;
         }
 
+        float power = 0;
+
         /* next symbol encodes the frame length */
         if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
 
-        const float value_header = argmax_of_fft_of_dechirped(NULL, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
-        if (value_header >= FLT_MAX) break;
+        const float value_header = argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
+        if (!power) break;
         const size_t data_symbols_expected = (lrintf(value_header + 2 * S) % S) + 1;
 
         fprintf(stderr, "%s: reading %.2f + 1 -> %zu values\n", __func__, value_header, data_symbols_expected);
@@ -208,8 +210,8 @@ int main(void) {
         for (size_t idata = 0; idata < data_symbols_expected; idata++) {
             if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
 
-            const float value = argmax_of_fft_of_dechirped(NULL, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
-            if (value >= FLT_MAX) break;
+            const float value = argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
+            if (!power) break;
 
             const unsigned symbol = lrintf(value + 2 * S) % S;
 
@@ -223,8 +225,8 @@ int main(void) {
 
         if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
 
-        const float value_parity = argmax_of_fft_of_dechirped(NULL, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
-        if (value_parity >= FLT_MAX) break;
+        const float value_parity = argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
+        if (!power) break;
         const unsigned parity_received = lrintf(value_parity + S) % S;
 
         /* use low bits of djb2 hash as checksum */
