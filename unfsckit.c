@@ -152,7 +152,7 @@ int main(void) {
 
     /* compute filter coefficients for eight-pole butterworth biquad cascade */
     float num[4][3], den[4][3];
-    butterworth_biquads(num, den, 4, sample_rate, 0.5 * bandwidth);
+    butterworth_biquads(num, den, 4, sample_rate, 0.75f * bandwidth);
     float complex vprev[4][2] = { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } };
 
     const float input_samples_per_filtered_sample = sample_rate / sample_rate_filtered;
