@@ -135,8 +135,8 @@ int main(void) {
                 /* always listen for upsweeps in this state */
                 const float value_up = argmax_of_fft_of_dechirped(&power_up, S, L, fft_output, fft_input, plan, history, ih, advances, 0);
 
-                /* if three or more upsweeps have been detected, also listen for downsweeps */
-                const float value_dn = upsweeps >= 3 ? (argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1)) : FLT_MAX;
+                /* if two or more agreeing upsweeps have been detected, also listen for downsweeps */
+                const float value_dn = upsweeps >= 2 ? (argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1)) : FLT_MAX;
 
                 /* if we got neither, just keep trying */
                 if (value_up >= FLT_MAX && value_dn >= FLT_MAX) continue;
@@ -163,7 +163,7 @@ int main(void) {
                         fprintf(stderr, "%s: shifting by %ld\n", __func__, lrintf(value_up_wrapped * L));
                         ih_next_frame -= lrintf(value_up_wrapped * L);
                     }
-                } else if (upsweeps >= 3) {
+                } else if (upsweeps >= 2) {
                     const float value_dn_wrapped = value_dn >= S / 2 ? value_dn - S : value_dn;
                     /* got a downsweep */
                     if (fabsf(value_dn_wrapped + residual) < 0.5f * S) {
