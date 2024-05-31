@@ -74,20 +74,6 @@ static float argmax_of_fft_of_dechirped(float * power_max_p,
     return circular_argmax_of_complex_vector(power_max_p, S, fft_output);
 }
 
-static int wait_for_frame(size_t * ih_p, size_t * ih_next_frame_p, const size_t S,
-                          const size_t L, float complex history[restrict static S * L]) {
-    /* this function ingests new samples, filling a ring buffer long enough to hold one
-     sweep at the intermediate (not necessarily critically sampled) sample rate, and returns
-     when the buffer is aligned with the next expected frame */
-    while (*ih_p != *ih_next_frame_p) {
-        float complex input;
-        if (fread(&input, sizeof(float complex), 1, stdin) <= 0) return -1;
-        history[((*ih_p)++) % (S * L)] = input;
-    }
-    *ih_next_frame_p += S * L;
-    return 0;
-}
-
 int main(void) {
     const unsigned bits_per_sweep = 5;
     const size_t S = 1U << bits_per_sweep; /* number of unique measurable symbols */
@@ -134,9 +120,17 @@ int main(void) {
     /* this will be (re)initialized and then updated as each data symbol comes in */
     unsigned hash;
 
-    /* loop over nominally non-overlapped fft frames */
+    /* loop over samples at the intermediate sample rate (an integer multiple of critical sampling) */
     while (1) {
-        if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
+        /* ingest new samples, filling a ring buffer long enough to hold one sweep */
+        float complex input;
+        if (fread(&input, sizeof(float complex), 1, stdin) <= 0) break;
+
+        history[(ih++) % (S * L)] = input;
+         /* wait for the buffer to be aligned with the next expected frame */
+        if (ih != ih_next_frame) continue;
+
+        ih_next_frame += S * L;
 
         float power = 0;
         const float value = remainderf(argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual, S);
