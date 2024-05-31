@@ -138,14 +138,11 @@ int main(void) {
                 /* if three or more upsweeps have been detected, also listen for downsweeps */
                 const float value_dn = upsweeps >= 3 ? (argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1)) : FLT_MAX;
 
-                fprintf(stderr, "%s: %g %g\n", __func__, power_up, power_dn);
-
                 /* if we got neither, just keep trying */
                 if (value_up >= FLT_MAX && value_dn >= FLT_MAX) continue;
 
                 if (power_up >= 2.0f * power_dn) {
                     const float value_up_wrapped = value_up >= S / 2 ? value_up - S : value_up;
-                    fprintf(stderr, "%s: upsweep detected at %g\n", __func__, value_up_wrapped);
                     /* got an upsweep */
                     downsweeps = 0;
 
@@ -158,7 +155,8 @@ int main(void) {
                         residual = value_up_wrapped;
                     }
 
-                    fprintf(stderr, "%s: %zu upsweeps detected\n", __func__, upsweeps);
+                    fprintf(stderr, "%s: upsweep detected at %g, total now %zu\n",
+                            __func__, value_up_wrapped, upsweeps);
 
                     if (fabsf(value_up_wrapped) >= 0.5f / L) {
                         /* got an upsweep that does not agree with anything previously */
@@ -167,11 +165,11 @@ int main(void) {
                     }
                 } else if (upsweeps >= 3) {
                     const float value_dn_wrapped = value_dn >= S / 2 ? value_dn - S : value_dn;
-                    fprintf(stderr, "%s(%d): got here %g\n", __func__, __LINE__, value_dn_wrapped);
                     /* got a downsweep */
                     if (fabsf(value_dn_wrapped + residual) < 0.5f * S) {
                         downsweeps++;
-                        fprintf(stderr, "%s: downsweep detected at %g + %g = %g\n", __func__, value_dn_wrapped, residual, value_dn_wrapped + residual);
+                        fprintf(stderr, "%s: downsweep detected at %g + %g = %g\n",__func__,
+                                value_dn_wrapped, residual, value_dn_wrapped + residual);
 
                         if (2 == downsweeps) {
                             /* the value detected here allows us to disambiguate between
@@ -180,12 +178,11 @@ int main(void) {
                             const float shift_unquantized = 0.5f * (value_dn_wrapped + residual) * L;
                             const int shift = lrintf(shift_unquantized);
 
-                            fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
-
                             ih_next_frame += shift;
                             residual += shift_unquantized / L;
 
-                            fprintf(stderr, "%s: residual is %g\n", __func__, residual);
+                            fprintf(stderr, "%s: shifted by %d, residual is %g\n", __func__,
+                                    shift, residual);
 
                             break;
                         }
