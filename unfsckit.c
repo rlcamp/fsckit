@@ -280,7 +280,7 @@ int main(void) {
             }
             else if (2 == state) {
                 /* update djb2 hash of data symbols */
-                hash = hash * 33U + symbol;
+                hash = hash * 33U ^ symbol;
 
                 fprintf(stderr, "%s: data symbol %zu/%zu: %u\n", __func__, idata, data_symbols_expected, symbol);
 

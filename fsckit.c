@@ -43,7 +43,7 @@ int main(void) {
     /* djb2 */
     unsigned hash = 5381;
     for (size_t id = 0; id < D; id++)
-        hash = hash * 33U + data_symbols[id];
+        hash = hash * 33U ^ data_symbols[id];
 
     /* oversampling factor, must be an integer for now */
     const size_t L = lrintf(fs / bw);
