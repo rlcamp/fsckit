@@ -133,29 +133,28 @@ int main(void) {
 
                 float power_up = 0, power_dn = 0;
                 /* always listen for upsweeps in this state */
-                const float value_up = argmax_of_fft_of_dechirped(&power_up, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
+                const float value_up = remainderf(argmax_of_fft_of_dechirped(&power_up, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual, S);
 
                 /* if two or more agreeing upsweeps have been detected, also listen for downsweeps */
-                const float value_dn = upsweeps >= 2 ? (argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1) + residual) : FLT_MAX;
+                const float value_dn = upsweeps >= 2 ? remainderf(argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1) + residual, S) : FLT_MAX;
 
                 /* if we got neither, just keep trying */
                 if (!power_up && !power_dn) continue;
 
                 if (power_up >= 2.0f * power_dn) {
-                    const float value_up_wrapped = value_up >= S / 2 ? value_up - S : value_up;
                     /* got an upsweep */
                     downsweeps = 0;
 
                     fprintf(stderr, "%s: upsweep detected at %g, total now %zu\n",
-                            __func__, value_up_wrapped, upsweeps);
+                            __func__, value_up, upsweeps);
 
-                    const float shift_unquantized = value_up_wrapped * L;
+                    const float shift_unquantized = value_up * L;
                     const int shift = lrintf(shift_unquantized);
                     if (shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
                     ih_next_frame -= shift;
                     residual += (shift_unquantized - shift) / L;
 
-                    if (fabsf(value_up_wrapped) >= 0.5f)
+                    if (fabsf(value_up) >= 0.5f)
                         upsweeps = 1;
                     else {
                         upsweeps++;
@@ -163,18 +162,17 @@ int main(void) {
                          upsweeps instead of just using the most recent value */
                     }
                 } else if (upsweeps >= 2) {
-                    const float value_dn_wrapped = value_dn >= S / 2 ? value_dn - S : value_dn;
                     /* got a downsweep */
-                    if (fabsf(value_dn_wrapped) < 0.5f * S) {
+                    if (fabsf(value_dn) < 0.5f * S) {
                         downsweeps++;
                         fprintf(stderr, "%s: downsweep detected at %g + %g = %g\n",__func__,
-                                value_dn_wrapped - residual, residual, value_dn_wrapped);
+                                value_dn - residual, residual, value_dn);
 
                         if (2 == downsweeps) {
                             /* the value detected here allows us to disambiguate between
                              timing error and carrier offset error, and correct both */
 
-                            const float shift_unquantized = 0.5f * value_dn_wrapped * L;
+                            const float shift_unquantized = 0.5f * value_dn * L;
                             const int shift = lrintf(shift_unquantized);
 
                             ih_next_frame += shift;
@@ -197,9 +195,9 @@ int main(void) {
         /* next symbol encodes the frame length */
         if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
 
-        const float value_header = argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
+        const float value_header = remainderf(argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual, S);
         if (!power) break;
-        const size_t data_symbols_expected = (lrintf(value_header + 2 * S) % S) + 1;
+        const size_t data_symbols_expected = (lrintf(value_header) + S) % S + 1;
 
         fprintf(stderr, "%s: reading %.2f + 1 -> %zu values\n", __func__, value_header, data_symbols_expected);
 
@@ -210,10 +208,10 @@ int main(void) {
         for (size_t idata = 0; idata < data_symbols_expected; idata++) {
             if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
 
-            const float value = argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
+            const float value = remainderf(argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual, S);
             if (!power) break;
 
-            const unsigned symbol = lrintf(value + 2 * S) % S;
+            const unsigned symbol = (lrintf(value + S)) % S;
 
             /* update djb2 hash of data symbols */
             hash = hash * 33U + symbol;
@@ -225,9 +223,9 @@ int main(void) {
 
         if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) break;
 
-        const float value_parity = argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
+        const float value_parity = remainderf(argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual, S);
         if (!power) break;
-        const unsigned parity_received = lrintf(value_parity + S) % S;
+        const unsigned parity_received = (lrintf(value_parity) + S) % S;
 
         /* use low bits of djb2 hash as checksum */
         const unsigned parity_calculated = hash & (S - 1U);
