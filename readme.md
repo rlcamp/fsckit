@@ -26,8 +26,6 @@ This modulation falls under the category of "spread spectrum" techniques in that
 
 - Add some forward error correction. LoRa uses one of several very simple Hamming codes. We can probably do better (and may be forced to in order to not step on the patent) but bear in mind this needs to work on a microcontroller with almost no available memory. Techniques which rely on a Fourier transform as the primitive would be convenient, as the demodulator already uses one.
 
-- Merge baseband.c into unfsckit.c and rework control flow
-
 ### References
 
 [1] L. Vangelista, "Frequency shift chirp modulation: The LoRa modulation," IEEE Signal Processing Letters, vol. 24, no. 12, pp. 1818–1821, Dec 2017.
