@@ -133,10 +133,10 @@ int main(void) {
 
                 float power_up = 0, power_dn = 0;
                 /* always listen for upsweeps in this state */
-                const float value_up = argmax_of_fft_of_dechirped(&power_up, S, L, fft_output, fft_input, plan, history, ih, advances, 0);
+                const float value_up = argmax_of_fft_of_dechirped(&power_up, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual;
 
                 /* if two or more agreeing upsweeps have been detected, also listen for downsweeps */
-                const float value_dn = upsweeps >= 2 ? (argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1)) : FLT_MAX;
+                const float value_dn = upsweeps >= 2 ? (argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1) + residual) : FLT_MAX;
 
                 /* if we got neither, just keep trying */
                 if (value_up >= FLT_MAX && value_dn >= FLT_MAX) continue;
@@ -153,6 +153,7 @@ int main(void) {
                     const int shift = lrintf(shift_unquantized);
                     if (shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
                     ih_next_frame -= shift;
+                    residual += (shift_unquantized - shift) / L;
 
                     if (fabsf(value_up_wrapped) >= 0.5f)
                         upsweeps = 1;
@@ -160,25 +161,24 @@ int main(void) {
                         upsweeps++;
                         /* TODO: do a running average of the residual over all preamble
                          upsweeps instead of just using the most recent value */
-                        residual = value_up_wrapped;
                     }
                 } else if (upsweeps >= 2) {
                     const float value_dn_wrapped = value_dn >= S / 2 ? value_dn - S : value_dn;
                     /* got a downsweep */
-                    if (fabsf(value_dn_wrapped + residual) < 0.5f * S) {
+                    if (fabsf(value_dn_wrapped) < 0.5f * S) {
                         downsweeps++;
                         fprintf(stderr, "%s: downsweep detected at %g + %g = %g\n",__func__,
-                                value_dn_wrapped, residual, value_dn_wrapped + residual);
+                                value_dn_wrapped - residual, residual, value_dn_wrapped);
 
                         if (2 == downsweeps) {
                             /* the value detected here allows us to disambiguate between
                              timing error and carrier offset error, and correct both */
 
-                            const float shift_unquantized = 0.5f * (value_dn_wrapped + residual) * L;
+                            const float shift_unquantized = 0.5f * value_dn_wrapped * L;
                             const int shift = lrintf(shift_unquantized);
 
                             ih_next_frame += shift;
-                            residual += shift_unquantized / L;
+                            residual += (float)shift / L;
 
                             fprintf(stderr, "%s: shifted by %d, residual is %g\n", __func__,
                                     shift, residual);
