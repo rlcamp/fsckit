@@ -131,30 +131,30 @@ int main(void) {
             while (1) {
                 if (-1 == wait_for_frame(&ih, &ih_next_frame, S, L, history)) { eof = 1; break; }
 
-                float power_up = 0, power_dn = 0;
+                float power = 0, power_dn = 0;
                 /* always listen for upsweeps in this state */
-                const float value_up = remainderf(argmax_of_fft_of_dechirped(&power_up, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual, S);
+                const float value = remainderf(argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual, S);
 
                 /* if two or more agreeing upsweeps have been detected, also listen for downsweeps */
                 const float value_dn = upsweeps >= 2 ? remainderf(argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1) + residual, S) : FLT_MAX;
 
                 /* if we got neither, just keep trying */
-                if (!power_up && !power_dn) continue;
+                if (!power && !power_dn) continue;
 
-                if (power_up >= 2.0f * power_dn) {
+                if (power >= 2.0f * power_dn) {
                     /* got an upsweep */
                     downsweeps = 0;
 
                     fprintf(stderr, "%s: upsweep detected at %g, total now %zu\n",
-                            __func__, value_up, upsweeps);
+                            __func__, value, upsweeps);
 
-                    const float shift_unquantized = value_up * L;
+                    const float shift_unquantized = value * L;
                     const int shift = lrintf(shift_unquantized);
                     if (shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
                     ih_next_frame -= shift;
                     residual += (shift_unquantized - shift) / L;
 
-                    if (fabsf(value_up) >= 0.5f)
+                    if (fabsf(value) >= 0.5f)
                         upsweeps = 1;
                     else {
                         upsweeps++;
