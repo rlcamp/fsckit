@@ -53,8 +53,8 @@ static float circular_argmax_of_complex_vector(float * max_magsquared_p, const s
 
 static void dechirp(const size_t S, const size_t L,
                     float complex fft_input[restrict static S],
-                    const float complex history[restrict static S * L], const size_t ih,
-                    const float complex advances[restrict static S * L], const int down) {
+                    const float complex history[restrict static S * L], const unsigned ih,
+                    const float complex advances[restrict static S * L], const char down) {
     /* extract critically sampled values from history, and multiply by conjugate of chirp */
     float complex carrier = 1.0f;
 
@@ -167,17 +167,17 @@ int main(void) {
 
     /* writer and reader cursors for input ring buffer. the reader shifts its own cursor
      around during preamble detection to align with symbol frames */
-    size_t ih = 0, ih_next_frame = S * L;
+    unsigned ih = 0, ih_next_frame = S * L;
 
     /* after preamble detection, this will hold a residual (circular) shift, in units
      of bins, that should be applied to the fft argmax to get the encoded value */
     float residual = 0;
 
     /* counters needed by preamble state */
-    size_t upsweeps = 0, downsweeps = 0;
+    unsigned upsweeps = 0, downsweeps = 0;
 
     /* counters needed by data states */
-    size_t data_symbols_expected = 0, idata = 0;
+    unsigned data_symbols_expected = 0, idata = 0;
 
     /* this will be (re)initialized and then updated as each data symbol comes in */
     unsigned hash;
@@ -235,7 +235,7 @@ int main(void) {
                     /* TODO: do a running average of the residual over all preamble
                      upsweeps instead of just using the most recent value */
 
-                fprintf(stderr, "%s: upsweep detected at %g, total now %zu\n",
+                fprintf(stderr, "%s: upsweep detected at %g, total now %u\n",
                         __func__, value, upsweeps);
             } else {
                 /* got a downsweep */
@@ -265,7 +265,7 @@ int main(void) {
 
             if (1 == state) {
                 data_symbols_expected = symbol + 1;
-                fprintf(stderr, "%s: reading %.2f + 1 -> %zu values\n", __func__, value, data_symbols_expected);
+                fprintf(stderr, "%s: reading %u values\n", __func__, data_symbols_expected);
 
                 /* initial value for djb2 checksum */
                 hash = 5381;
@@ -276,19 +276,17 @@ int main(void) {
                 /* update djb2 hash of data symbols */
                 hash = hash * 33U ^ symbol;
 
-                fprintf(stderr, "%s: data symbol %zu/%zu: %u\n", __func__, idata, data_symbols_expected, symbol);
+                fprintf(stderr, "%s: data symbol %u/%u: %u\n", __func__, idata, data_symbols_expected, symbol);
 
                 idata++;
                 if (data_symbols_expected == idata) state++;
             }
             else if (3 == state) {
-                const unsigned parity_received = symbol;
-
                 /* use low bits of djb2 hash as checksum */
-                const unsigned parity_calculated = hash & (S - 1U);
+                const unsigned hash_low_bits = hash & (S - 1U);
 
                 fprintf(stderr, "%s: parity received: %u, calculated %u, %s\n", __func__,
-                        parity_received, parity_calculated, parity_received == parity_calculated ? "pass" : "fail");
+                        symbol, hash_low_bits, symbol == hash_low_bits ? "pass" : "fail");
 
                 /* reset and wait for next packet */
                 state = 0;
