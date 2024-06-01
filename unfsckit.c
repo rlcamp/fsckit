@@ -218,9 +218,6 @@ int main(void) {
                 value_dn = remainderf(circular_argmax_of_complex_vector(&power_dn, S, fft_output) + residual, S);
             }
 
-            /* if we got neither, just keep trying */
-            if (!power && !power_dn) continue;
-
             if (power >= 2.0f * power_dn) {
                 /* got an upsweep */
                 downsweeps = 0;
