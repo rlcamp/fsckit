@@ -214,9 +214,9 @@ int main(void) {
 
         /* if listening for preamble... */
         if (0 == state) {
-            /* if two or more agreeing upsweeps have been detected, also listen for downsweeps */
+            /* if three or more agreeing upsweeps have been detected, also listen for downsweeps */
             float power_dn = 0;
-            const float value_dn = upsweeps >= 2 ? remainderf(argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1) + residual, S) : FLT_MAX;
+            const float value_dn = upsweeps >= 3 ? remainderf(argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1) + residual, S) : FLT_MAX;
 
             /* if we got neither, just keep trying */
             if (!power && !power_dn) continue;
@@ -241,7 +241,7 @@ int main(void) {
                     /* TODO: do a running average of the residual over all preamble
                      upsweeps instead of just using the most recent value */
                 }
-            } else if (upsweeps >= 2) {
+            } else if (upsweeps >= 3) {
                 /* got a downsweep */
                 if (fabsf(value_dn) < 0.5f * S) {
                     downsweeps++;
