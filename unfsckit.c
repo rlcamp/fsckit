@@ -232,9 +232,6 @@ int main(void) {
                 /* got an upsweep */
                 downsweeps = 0;
 
-                fprintf(stderr, "%s: upsweep detected at %g, total now %zu\n",
-                        __func__, value, upsweeps);
-
                 const float shift_unquantized = value * L;
                 const int shift = lrintf(shift_unquantized);
                 if (shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
@@ -243,11 +240,13 @@ int main(void) {
 
                 if (fabsf(value) >= 0.5f)
                     upsweeps = 1;
-                else {
+                else
                     upsweeps++;
                     /* TODO: do a running average of the residual over all preamble
                      upsweeps instead of just using the most recent value */
-                }
+
+                fprintf(stderr, "%s: upsweep detected at %g, total now %zu\n",
+                        __func__, value, upsweeps);
             } else if (upsweeps >= 3) {
                 /* got a downsweep */
                 if (fabsf(value_dn) < 0.5f * S) {
