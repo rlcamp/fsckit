@@ -22,6 +22,14 @@ This modulation falls under the category of "spread spectrum" techniques in that
 
 ### Todo
 
+- Better false alarm mitigation. This will require both better resistance to incorrectly leaving the detecting-a-preamble state, as well as a way to quickly return to it rather than demodulating a long data packet that does not exist. A checksum on the packet length might be most surefire way to achieve this, at the expense of adding overhead to every packet
+
+- Symbols-to-bytes layer in the state machine. This will probably require a rethink of how the packets are construction downstream of the preamble.
+
+- Do some testing to determine whether a simple high-pass filter of the raw incoming real samples, prior to the bandpassing and decimation, would be a net benefit. It may allow the bandpass filter to have significantly fewer poles and still provide adequate suppression of typical interference.
+
+- Identify and eliminate slow libc calls. The code has a number of remainderf() and lrintf() calls within the hot loop which can be a bottleneck or not, depending on how well they are implemented and optimized for the finite-math-only case within various libc's we care about.
+
 - Figure out what is covered by the patent and make sure we are in the clear
 
 - Add some forward error correction. LoRa uses one of several very simple Hamming codes. We can probably do better (and may be forced to in order to not step on the patent) but bear in mind this needs to work on a microcontroller with almost no available memory. Techniques which rely on a Fourier transform as the primitive would be convenient, as the demodulator already uses one.
