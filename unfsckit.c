@@ -51,6 +51,20 @@ static float circular_argmax_of_complex_vector(float * max_magsquared_p, const s
     return is_max + p;
 }
 
+static void dechirp(const size_t S, const size_t L,
+                    float complex fft_input[restrict static S],
+                    const float complex history[restrict static S * L], const size_t ih,
+                    const float complex advances[restrict static S * L], const int down) {
+    /* extract critically sampled values from history, and multiply by conjugate of chirp */
+    float complex carrier = 1.0f;
+
+    for (size_t is = 0; is < S; is++) {
+        /* TODO: document this indexing math wow */
+        fft_input[is] = history[(is * L + ih) % (S * L)] * (down ? carrier : conjf(carrier));
+        carrier = renormalize(carrier * advances[(is * L) % (S * L)]);
+    }
+}
+
 static float argmax_of_fft_of_dechirped(float * power_max_p,
                                         const size_t S, const size_t L,
                                         float complex fft_output[restrict static S],
@@ -60,14 +74,7 @@ static float argmax_of_fft_of_dechirped(float * power_max_p,
                                         const size_t ih,
                                         const float complex advances[restrict static S * L],
                                         const int down) {
-    /* extract critically sampled values from history, and multiply by conjugate of chirp */
-    float complex carrier = 1.0f;
-
-    for (size_t is = 0; is < S; is++) {
-        /* TODO: document this indexing math wow */
-        fft_input[is] = history[(is * L + ih) % (S * L)] * (down ? carrier : conjf(carrier));
-        carrier = renormalize(carrier * advances[(is * L) % (S * L)]);
-    }
+    dechirp(S, L, fft_input, history, ih, advances, down);
 
     fft_evaluate_forward(fft_output, fft_input, plan);
 
