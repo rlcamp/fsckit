@@ -65,22 +65,6 @@ static void dechirp(const size_t S, const size_t L,
     }
 }
 
-static float argmax_of_fft_of_dechirped(float * power_max_p,
-                                        const size_t S, const size_t L,
-                                        float complex fft_output[restrict static S],
-                                        float complex fft_input[restrict static S],
-                                        const struct planned_forward_fft * plan,
-                                        const float complex history[restrict static S * L],
-                                        const size_t ih,
-                                        const float complex advances[restrict static S * L],
-                                        const int down) {
-    dechirp(S, L, fft_input, history, ih, advances, down);
-
-    fft_evaluate_forward(fft_output, fft_input, plan);
-
-    return circular_argmax_of_complex_vector(power_max_p, S, fft_output);
-}
-
 static void populate_advances(const size_t S, const size_t L, float complex advances[restrict static S * L]) {
     /* construct a lookup table of the S*L roots of unity we need for dechirping the input.
      these will be uniformly spaced about the unit circle starting at -1 on the real axis */
@@ -215,15 +199,24 @@ int main(void) {
 
         ih_next_frame += S * L;
 
+        dechirp(S, L, fft_input, history, ih, advances, 0);
+
+        fft_evaluate_forward(fft_output, fft_input, plan);
+
         float power = 0;
-        const float value = remainderf(argmax_of_fft_of_dechirped(&power, S, L, fft_output, fft_input, plan, history, ih, advances, 0) - residual, S);
+        const float value = remainderf(circular_argmax_of_complex_vector(&power, S, fft_output) - residual, S);
+
         if (!power) continue;
 
         /* if listening for preamble... */
         if (0 == state) {
             /* if three or more agreeing upsweeps have been detected, also listen for downsweeps */
-            float power_dn = 0;
-            const float value_dn = upsweeps >= 3 ? remainderf(argmax_of_fft_of_dechirped(&power_dn, S, L, fft_output, fft_input, plan, history, ih, advances, 1) + residual, S) : FLT_MAX;
+            float power_dn = 0, value_dn = FLT_MAX;
+            if (upsweeps >= 3) {
+                dechirp(S, L, fft_input, history, ih, advances, 1);
+                fft_evaluate_forward(fft_output, fft_input, plan);
+                value_dn = remainderf(circular_argmax_of_complex_vector(&power_dn, S, fft_output) + residual, S);
+            }
 
             /* if we got neither, just keep trying */
             if (!power && !power_dn) continue;
