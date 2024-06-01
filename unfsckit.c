@@ -1,4 +1,4 @@
-/* minimum viable usage: ./fsckit | ./baseband | ./unfsckit */
+/* minimum viable usage: ./fsckit | ./unfsckit */
 #include "fft_anywhere.h"
 #include <stdlib.h>
 #include <stdio.h>
