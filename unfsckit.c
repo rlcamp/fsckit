@@ -67,7 +67,7 @@ static void dechirp(const size_t S, const size_t L,
 
 static void populate_advances(const size_t S, const size_t L, float complex advances[restrict static S * L]) {
     /* construct a lookup table of the S*L roots of unity we need for dechirping the input.
-     these will be uniformly spaced about the unit circle starting at -1 on the real axis */
+     these will be uniformly spaced about the unit circle starting near -1 on the real axis */
     float complex advance = -1.0f * cexpf(I * 2.0f * (float)M_PI * 0.5f / S);;
     const float complex advance_advance = cexpf(I * 2.0f * (float)M_PI / (S * L));
     for (size_t isl = 0; isl < S * L; isl++) {
@@ -126,18 +126,17 @@ int main(void) {
     const size_t S = 1U << bits_per_sweep; /* number of unique measurable symbols */
     /* critically sampled also means there are S complex samples of the band per symbol */
 
+    /* input arguments, all in cycles, samples, or symbols per second */
+    const float sample_rate = 8000, f_carrier = 2000, bandwidth = 250;
+
     /* optional intermediate oversampling factor. must be a power of 2, but can be 1. using
      a value larger than 1 allows finer time alignment of the input to the demodulator, at
      the expense of more sram usage (but not more computational load). the demodulator
      itself always runs at the critical sampling rate s.t the chirps exactly wrap around */
     const size_t L = 2;
-
-    /* input arguments, all in cycles, samples, or symbols per second */
-    const float sample_rate = 8000, f_carrier = 2000, bandwidth = 250;
-
     const float sample_rate_filtered = L * bandwidth;
 
-    /* derived constants */
+    /* initial value and advance rate of the local oscillator for basebanding */
     float complex carrier = 1.0f;
     const float complex advance = cexpf(I * 2.0f * (float)M_PI * f_carrier / sample_rate);
 
@@ -184,25 +183,33 @@ int main(void) {
 
     float sample;
     while (fread(&sample, sizeof(float), 1, stdin)) {
+        /* multiply incoming real-valued sample by local oscillator for basebanding */
         float complex filtered = sample * conjf(carrier);
         carrier = renormalize(carrier * advance);
+
+        /* apply the biquad filter stages to reject stuff outside the passband */
         for (size_t is = 0; is < 4; is++)
             filtered = cfilter(filtered, vprev[is], num[is], den[is]);
 
+        /* decimate the filter output to a small integer multiple of nyquist rate */
         input_samples_since_filtered_sample++;
         if (input_samples_since_filtered_sample + 0.5f < input_samples_per_filtered_sample) continue;
         input_samples_since_filtered_sample -= input_samples_per_filtered_sample;
 
+        /* store the basebanded filtered decimated samples in a ring buffer */
         history[(ih++) % (S * L)] = filtered;
+
          /* wait for the buffer to be aligned with the next expected frame */
         if (ih != ih_next_frame) continue;
-
         ih_next_frame += S * L;
 
+        /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
         dechirp(S, L, fft_input, history, ih, advances, 0);
 
+        /* do an fft of the dechirped symbol frame */
         fft_evaluate_forward(fft_output, fft_input, plan);
 
+        /* find index (incl estimating the fractional part) of the loudest fft bin */
         float power = 0;
         const float value = remainderf(circular_argmax_of_complex_vector(&power, S, fft_output) - residual, S);
 
@@ -218,6 +225,7 @@ int main(void) {
                 value_dn = remainderf(circular_argmax_of_complex_vector(&power_dn, S, fft_output) + residual, S);
             }
 
+            /* if not yet detecting downsweeps, or upsweep was notably louder than possible downsweep... */
             if (power >= 2.0f * power_dn) {
                 /* got an upsweep */
                 downsweeps = 0;
