@@ -237,28 +237,26 @@ int main(void) {
 
                 fprintf(stderr, "%s: upsweep detected at %g, total now %zu\n",
                         __func__, value, upsweeps);
-            } else if (upsweeps >= 3) {
+            } else {
                 /* got a downsweep */
-                if (fabsf(value_dn) < 0.5f * S) {
-                    downsweeps++;
-                    fprintf(stderr, "%s: downsweep detected at %g + %g = %g\n",__func__,
-                            value_dn - residual, residual, value_dn);
+                downsweeps++;
+                fprintf(stderr, "%s: downsweep detected at %g + %g = %g\n",__func__,
+                        value_dn - residual, residual, value_dn);
 
-                    if (2 == downsweeps) {
-                        /* the value detected here allows us to disambiguate between
-                         timing error and carrier offset error, and correct both */
+                if (2 == downsweeps) {
+                    /* the value detected here allows us to disambiguate between
+                     timing error and carrier offset error, and correct both */
 
-                        const float shift_unquantized = 0.5f * value_dn * L;
-                        const int shift = lrintf(shift_unquantized);
+                    const float shift_unquantized = 0.5f * value_dn * L;
+                    const int shift = lrintf(shift_unquantized);
 
-                        ih_next_frame += shift;
-                        residual += (float)shift / L;
+                    ih_next_frame += shift;
+                    residual += (float)shift / L;
 
-                        fprintf(stderr, "%s: shifted by %d, residual is %g\n", __func__,
-                                shift, residual);
+                    fprintf(stderr, "%s: shifted by %d, residual is %g\n", __func__,
+                            shift, residual);
 
-                        state++;
-                    }
+                    state++;
                 }
             }
         } else {
