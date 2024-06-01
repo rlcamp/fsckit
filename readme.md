@@ -24,7 +24,7 @@ This modulation falls under the category of "spread spectrum" techniques in that
 
 - Better false alarm mitigation. This will require both better resistance to incorrectly leaving the detecting-a-preamble state, as well as a way to quickly return to it rather than demodulating a long data packet that does not exist. A checksum on the packet length might be most surefire way to achieve this, at the expense of adding overhead to every packet
 
-- Symbols-to-bytes layer in the state machine. This will probably require a rethink of how the packets are construction downstream of the preamble.
+- Symbols-to-bytes layer in the state machine. This will probably require a rethink of how the packets are constructed downstream of the preamble
 
 - Do some testing to determine whether a simple high-pass filter of the raw incoming real samples, prior to the bandpassing and decimation, would be a net benefit. It may allow the bandpass filter to have significantly fewer poles and still provide adequate suppression of typical interference.
 
