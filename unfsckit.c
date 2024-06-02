@@ -181,6 +181,8 @@ int main(void) {
     /* this will be (re)initialized and then updated as each data symbol comes in */
     unsigned hash;
 
+    float downsweep_prev = 0;
+
     float sample;
     while (fread(&sample, sizeof(float), 1, stdin)) {
         /* multiply incoming real-valued sample by local oscillator for basebanding */
@@ -251,7 +253,7 @@ int main(void) {
                 fprintf(stderr, "%s: downsweep detected at %g + %g = %g\n",__func__,
                         value_dn - residual, residual, value_dn);
 
-                if (2 == downsweeps) {
+                if (2 == downsweeps && fabsf(remainderf(value_dn - downsweep_prev, S)) < 0.25f * S) {
                     /* the value detected here allows us to disambiguate between
                      timing error and carrier offset error, and correct both */
 
@@ -266,6 +268,12 @@ int main(void) {
 
                     state++;
                 }
+                else if (2 == downsweeps) {
+                    /* just reset and go back to listening for upsweeps */
+                    upsweeps = 0;
+                    downsweeps = 0;
+                }
+                else downsweep_prev = value_dn;
             }
         } else {
             const unsigned symbol = (lrintf(value + S)) % S;
