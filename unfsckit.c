@@ -127,7 +127,7 @@ int main(void) {
     /* critically sampled also means there are S complex samples of the band per symbol */
 
     /* input arguments, all in cycles, samples, or symbols per second */
-    const float sample_rate = 8000, f_carrier = 2000, bandwidth = 250;
+    const float sample_rate = 46875, f_carrier = 3662.11f, bandwidth = 366.211;
 
     /* optional intermediate oversampling factor. must be a power of 2, but can be 1. using
      a value larger than 1 allows finer time alignment of the input to the demodulator, at

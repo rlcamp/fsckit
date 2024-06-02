@@ -22,13 +22,13 @@ static float complex emit_sweep(float complex carrier, const size_t T,
 
 int main(void) {
     /* sample rate */
-    float fs = 8000;
+    float fs = 46875.0f;
 
     /* bandwidth of modulation, also sample rate if critically sampled */
-    float bw = 250.0f;
+    float bw = 366.211;
 
     /* centre frequency */
-    float fc = 2000.0f;
+    float fc = 3662.11f;
 
     /* this parameter also controls the spreading factor */
     unsigned bits_per_sweep = 5;
