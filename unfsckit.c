@@ -1,4 +1,4 @@
-/* minimum viable usage: ./fsckit | ./unfsckit */
+/* minimum viable usage: printf 'hello\n' | ./fsckit | ./unfsckit */
 #include "fft_anywhere.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -176,7 +176,7 @@ int main(void) {
     unsigned upsweeps = 0, downsweeps = 0;
 
     /* counters needed by data states */
-    unsigned data_symbols_expected = 0, idata = 0;
+    unsigned bytes_expected = 0, ibyte = 0;
 
     /* this will be (re)initialized and then updated as each data symbol comes in */
     unsigned hash;
@@ -184,6 +184,9 @@ int main(void) {
     float downsweep_prev = 0;
 
     setvbuf(stdin, NULL, _IONBF, 0);
+
+    unsigned bits = 0;
+    unsigned short bits_filled = 0;
 
     int16_t sample_prev = 0, sample;
     while (fread(&sample, sizeof(int16_t), 1, stdin)) {
@@ -282,22 +285,35 @@ int main(void) {
             fprintf(stderr, "%s: %.2f - %.2f = %.2f -> %u\n", __func__, value + residual, residual, value, symbol);
 
             if (1 == state) {
-                data_symbols_expected = symbol + 1;
-                fprintf(stderr, "%s: reading %u values\n", __func__, data_symbols_expected);
+                bytes_expected = symbol + 1;
+                const unsigned data_symbols_expected = (bytes_expected * 8 + bits_per_sweep - 1) / bits_per_sweep;
+                fprintf(stderr, "%s: reading %u bytes in %u symbols\n", __func__, bytes_expected, data_symbols_expected);
 
                 /* initial value for djb2 checksum */
                 hash = 5381;
-                idata = 0;
+                ibyte = 0;
+                bits = 0;
+                bits_filled = 0;
                 state++;
             }
             else if (2 == state) {
-                /* update djb2 hash of data symbols */
-                hash = hash * 33U ^ symbol;
+                bits |= symbol << bits_filled;
+                bits_filled += bits_per_sweep;
+                if (bits_filled >= 8) {
+                    const unsigned char byte = bits & 0xff;
 
-                fprintf(stderr, "%s: data symbol %u/%u: %u\n", __func__, idata, data_symbols_expected, symbol);
+                    /* update djb2 hash of data bytes */
+                    hash = hash * 33U ^ byte;
 
-                idata++;
-                if (data_symbols_expected == idata) state++;
+                    fprintf(stderr, "%s: data byte %u/%u: %u\n", __func__, ibyte, bytes_expected, byte);
+                    fputc(byte, stdout);
+
+                    bits >>= 8;
+                    bits_filled -= 8;
+                    ibyte++;
+                }
+
+                if (bytes_expected == ibyte) state++;
             }
             else if (3 == state) {
                 /* use low bits of djb2 hash as checksum */

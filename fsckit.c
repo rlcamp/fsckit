@@ -36,14 +36,19 @@ int main(void) {
     /* number of unique measurable symbols is 2^bits_per_sweep */
     const size_t S = 1U << bits_per_sweep;
 
-    const unsigned data_symbols[] = { 2, 4, 6, 0, 1 };
-    const size_t D = sizeof(data_symbols) / sizeof(data_symbols[0]);
+    char * bytes = NULL;
+    size_t linecap = 0;
+    const ssize_t B = getdelim(&bytes, &linecap, 0, stdin);
+    if (B <= 0) exit(EXIT_FAILURE);
+
+    const size_t D = (B * 8 + bits_per_sweep - 1) / bits_per_sweep;
     assert(D <= S);
+
+    unsigned bits = 0;
+    unsigned short bits_filled = 0;
 
     /* djb2 */
     unsigned hash = 5381;
-    for (size_t id = 0; id < D; id++)
-        hash = hash * 33U ^ data_symbols[id];
 
     /* oversampling factor, must be an integer for now */
     const size_t L = lrintf(fs / bw);
@@ -82,12 +87,31 @@ int main(void) {
     carrier = emit_sweep(carrier, T, advances, 0, 1);
     carrier = emit_sweep(carrier, T, advances, 0, 1);
 
-    /* one upsweep, circularly shifted to encode length of message in symbols */
-    carrier = emit_sweep(carrier, T, advances, (D - 1) * L, 0);
+    /* one upsweep, circularly shifted to encode length of message in bytes */
+    carrier = emit_sweep(carrier, T, advances, (B - 1) * L, 0);
 
     /* one shifted upsweep per data symbol */
-    for (size_t id = 0; id < D; id++)
-        carrier = emit_sweep(carrier, T, advances, data_symbols[id] * L, 0);
+    for (int ibyte = 0; ibyte < B || bits_filled; ) {
+        while (bits_filled >= bits_per_sweep) {
+            const unsigned symbol = bits & (S - 1U);
+            carrier = emit_sweep(carrier, T, advances, symbol * L, 0);
+            bits >>= bits_per_sweep;
+            bits_filled -= bits_per_sweep;
+        }
+        if (B == ibyte && bits_filled) {
+            /* emit an extra symbol to complete the last byte if there are leftover bits */
+            const unsigned symbol = bits & (1U << bits_filled);
+            carrier = emit_sweep(carrier, T, advances, symbol * L, 0);
+            bits >>= bits_filled;
+            bits_filled = 0;
+        }
+        while (bits_filled < 8 && ibyte < B) {
+            const unsigned char byte = bytes[ibyte++];
+            hash = hash * 33U ^ byte;
+            bits |= byte << bits_filled;
+            bits_filled += 8;
+        }
+    }
 
     /* one upsweep for checksum (lowest bits of djb2 of data symbols) */
     carrier = emit_sweep(carrier, T, advances, (hash & (S - 1U)) * L, 0);
