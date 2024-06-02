@@ -183,6 +183,8 @@ int main(void) {
 
     float downsweep_prev = 0;
 
+    setvbuf(stdin, NULL, _IONBF, 0);
+
     int16_t sample_prev = 0, sample;
     while (fread(&sample, sizeof(int16_t), 1, stdin)) {
         /* multiply incoming real-valued sample by local oscillator for basebanding */
