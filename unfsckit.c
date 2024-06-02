@@ -235,24 +235,23 @@ int main(void) {
 
                 const float shift_unquantized = value * L;
                 const int shift = lrintf(shift_unquantized);
-                if (shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
                 ih_next_frame -= shift;
                 residual += (shift_unquantized - shift) / L;
 
                 if (fabsf(value) >= 0.5f)
                     upsweeps = 1;
-                else
+                else {
                     upsweeps++;
                     /* TODO: do a running average of the residual over all preamble
                      upsweeps instead of just using the most recent value */
 
-                fprintf(stderr, "%s: upsweep detected at %g, total now %u\n",
-                        __func__, value, upsweeps);
+                    if (upsweeps >= 2 && shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
+
+                    fprintf(stderr, "%s: upsweep: %ld dB, %.2f, total now %u\n", __func__, lrintf(10.0f * log10f(power)), value, upsweeps);
+                }
             } else {
                 /* got a downsweep */
                 downsweeps++;
-                fprintf(stderr, "%s: downsweep detected at %g + %g = %g\n",__func__,
-                        value_dn - residual, residual, value_dn);
 
                 if (2 == downsweeps && fabsf(remainderf(value_dn - downsweep_prev, S)) < 2.0f) {
                     /* the value detected here allows us to disambiguate between
@@ -264,7 +263,7 @@ int main(void) {
                     ih_next_frame += shift;
                     residual += (float)shift / L;
 
-                    fprintf(stderr, "%s: shifted by %d, residual is %g\n", __func__,
+                    fprintf(stderr, "%s: shifted by %d, residual is %.2f\n", __func__,
                             shift, residual);
 
                     state++;
