@@ -70,7 +70,7 @@ int main(void) {
 
     /* maybe emit some quiet samples */
     for (size_t ioffset = 0; ioffset < 999; ioffset++)
-        fwrite(&(float complex) { 0 }, sizeof(float complex), 1, stdout);
+        fwrite(&(float) { 0 }, sizeof(float), 1, stdout);
 
     /* emit four unshifted upsweeps, with continuous carrier phase across sweeps */
     carrier = emit_sweep(carrier, T, advances, 0, 0);
@@ -93,7 +93,7 @@ int main(void) {
     carrier = emit_sweep(carrier, T, advances, (hash & (S - 1U)) * L, 0);
 
     for (size_t ioffset = 0; ioffset < T; ioffset++)
-        fwrite(&(float complex) { 0 }, sizeof(float complex), 1, stdout);
+        fwrite(&(float) { 0 }, sizeof(float), 1, stdout);
 
     free(advances);
 }
