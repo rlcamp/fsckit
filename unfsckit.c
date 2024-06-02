@@ -254,7 +254,7 @@ int main(void) {
                 fprintf(stderr, "%s: downsweep detected at %g + %g = %g\n",__func__,
                         value_dn - residual, residual, value_dn);
 
-                if (2 == downsweeps && fabsf(remainderf(value_dn - downsweep_prev, S)) < 0.25f * S) {
+                if (2 == downsweeps && fabsf(remainderf(value_dn - downsweep_prev, S)) < 2.0f) {
                     /* the value detected here allows us to disambiguate between
                      timing error and carrier offset error, and correct both */
 
