@@ -183,8 +183,8 @@ int main(void) {
 
     float downsweep_prev = 0;
 
-    float sample;
-    while (fread(&sample, sizeof(float), 1, stdin)) {
+    int16_t sample;
+    while (fread(&sample, sizeof(int16_t), 1, stdin)) {
         /* multiply incoming real-valued sample by local oscillator for basebanding */
         float complex filtered = sample * conjf(carrier);
         carrier = renormalize(carrier * advance);

@@ -14,7 +14,7 @@ static float complex emit_sweep(float complex carrier, const size_t T,
                                 const float complex advances[restrict static T],
                                 const size_t shift, const int down) {
     for (size_t it = 0; it < T; it++) {
-        fwrite(&(float) { crealf(carrier) }, sizeof(float), 1, stdout);
+        fwrite(&(int16_t) { lrintf(crealf(carrier) * 32767.0f) }, sizeof(int16_t), 1, stdout);
         carrier = renormalize(carrier * advances[((down ? T - it : it) + shift) % T]);
     }
     return carrier;
@@ -70,7 +70,7 @@ int main(void) {
 
     /* maybe emit some quiet samples */
     for (size_t ioffset = 0; ioffset < 999; ioffset++)
-        fwrite(&(float) { 0 }, sizeof(float), 1, stdout);
+        fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
 
     /* emit four unshifted upsweeps, with continuous carrier phase across sweeps */
     carrier = emit_sweep(carrier, T, advances, 0, 0);
@@ -93,7 +93,7 @@ int main(void) {
     carrier = emit_sweep(carrier, T, advances, (hash & (S - 1U)) * L, 0);
 
     for (size_t ioffset = 0; ioffset < T; ioffset++)
-        fwrite(&(float) { 0 }, sizeof(float), 1, stdout);
+        fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
 
     free(advances);
 }
