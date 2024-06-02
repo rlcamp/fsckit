@@ -140,9 +140,9 @@ int main(void) {
     float complex carrier = 1.0f;
     const float complex advance = cexpf(I * 2.0f * (float)M_PI * f_carrier / sample_rate);
 
-    /* compute filter coefficients for eight-pole butterworth biquad cascade */
-    float num[4][3], den[4][3];
-    butterworth_biquads(num, den, 4, sample_rate, 0.75f * bandwidth);
+    /* compute filter coefficients for four-pole butterworth biquad cascade */
+    float num[2][3], den[2][3];
+    butterworth_biquads(num, den, 2, sample_rate, 0.75f * bandwidth);
 
     const float input_samples_per_filtered_sample = sample_rate / sample_rate_filtered;
 
@@ -155,7 +155,7 @@ int main(void) {
     populate_advances(S, L, advances);
 
     /* biquad cascade filter state */
-    float complex vprev[4][2] = { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } };
+    float complex vprev[2][2] = { { 0, 0 }, { 0, 0 } };
 
     /* decimator state */
     float input_samples_since_filtered_sample = 0;
@@ -191,7 +191,7 @@ int main(void) {
         carrier = renormalize(carrier * advance);
 
         /* apply the biquad filter stages to reject stuff outside the passband */
-        for (size_t is = 0; is < 4; is++)
+        for (size_t is = 0; is < 2; is++)
             filtered = cfilter(filtered, vprev[is], num[is], den[is]);
 
         /* decimate the filter output to a small integer multiple of nyquist rate */
