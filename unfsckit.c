@@ -183,10 +183,11 @@ int main(void) {
 
     float downsweep_prev = 0;
 
-    int16_t sample;
+    int16_t sample_prev = 0, sample;
     while (fread(&sample, sizeof(int16_t), 1, stdin)) {
         /* multiply incoming real-valued sample by local oscillator for basebanding */
-        float complex filtered = sample * conjf(carrier);
+        float complex filtered = (sample - sample_prev) * conjf(carrier);
+        sample_prev = sample;
         carrier = renormalize(carrier * advance);
 
         /* apply the biquad filter stages to reject stuff outside the passband */
