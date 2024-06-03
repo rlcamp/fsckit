@@ -3,6 +3,7 @@
 #include <math.h>
 #include <complex.h>
 #include <assert.h>
+#include <string.h>
 
 static float complex renormalize(const float complex x) {
     /* assuming x is already near unity, renormalize to unity w/o div or sqrt */
@@ -65,10 +66,15 @@ int main(void) {
 
     /* loop over lines of text on stdin, emitting one message per line */
     char * bytes = NULL;
+    char * line = NULL;
     size_t linecap = 0;
-    ssize_t B;
-    while ((B = getline(&bytes, &linecap, stdin)) > 0) {
-        assert((size_t)B <= S);
+    while (1) {
+        if (!bytes || !bytes[0]) {
+            if (getline(&line, &linecap, stdin) <= 0) break;
+            bytes = line;
+        }
+        const size_t line_remaining = strlen(bytes);
+        const size_t B = line_remaining <= S ? line_remaining : S;
 
         unsigned bits = 0;
         unsigned short bits_filled = 0;
@@ -92,7 +98,7 @@ int main(void) {
         carrier = emit_sweep(carrier, T, advances, (B - 1) * L, 0);
 
         /* one shifted upsweep per data symbol */
-        for (int ibyte = 0; ibyte < B || bits_filled; ) {
+        for (size_t ibyte = 0; ibyte < B || bits_filled; ) {
             while (bits_filled >= bits_per_sweep) {
                 const unsigned symbol = bits & (S - 1U);
                 carrier = emit_sweep(carrier, T, advances, symbol * L, 0);
@@ -116,6 +122,8 @@ int main(void) {
 
         /* one upsweep for checksum (lowest bits of djb2 of data symbols) */
         carrier = emit_sweep(carrier, T, advances, (hash & (S - 1U)) * L, 0);
+
+        bytes += B;
     }
 
     for (size_t ioffset = 0; ioffset < T; ioffset++)
