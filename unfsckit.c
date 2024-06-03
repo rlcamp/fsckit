@@ -279,6 +279,7 @@ int main(void) {
                     /* just reset and go back to listening for upsweeps */
                     upsweeps = 0;
                     downsweeps = 0;
+                    residual = 0;
                 }
                 else downsweep_prev = value_dn;
             }
@@ -328,6 +329,7 @@ int main(void) {
                 state = 0;
                 upsweeps = 0;
                 downsweeps = 0;
+                residual = 0;
             }
         }
     }
