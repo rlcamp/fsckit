@@ -252,11 +252,13 @@ int main(void) {
 
                     if (upsweeps >= 2 && shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
 
-                    fprintf(stderr, "%s: upsweep: %ld dB, %.2f, total now %u\n", __func__, lrintf(10.0f * log10f(power)), value, upsweeps);
+                    fprintf(stderr, "%s: upsweep at %u: %ld mB, %.2f, total now %u\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power)), value, upsweeps);
                 }
             } else {
                 /* got a downsweep */
                 downsweeps++;
+
+                fprintf(stderr, "%s: downsweep at %u: %ld mB, %.2f, total now %u\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power_dn)), value_dn, downsweeps);
 
                 if (2 == downsweeps && fabsf(remainderf(value_dn - downsweep_prev, S)) < 2.0f) {
                     /* the value detected here allows us to disambiguate between
@@ -268,8 +270,8 @@ int main(void) {
                     ih_next_frame += shift;
                     residual += (float)shift / L;
 
-                    fprintf(stderr, "%s: shifted by %d, residual is %.2f\n", __func__,
-                            shift, residual);
+                    fprintf(stderr, "%s: shifted by %d, next frame at %u, residual is %.2f\n", __func__,
+                            shift, (unsigned)ih_next_frame, residual);
 
                     state++;
                 }
@@ -282,7 +284,7 @@ int main(void) {
             }
         } else {
             const unsigned symbol = (lrintf(value + S)) % S;
-            fprintf(stderr, "%s: %.2f - %.2f = %.2f -> %u\n", __func__, value + residual, residual, value, symbol);
+            fprintf(stderr, "%s: %ld mdB, %.2f - %.2f = %.2f -> %u, residual error %.2f\n", __func__, lrintf(1e3 * log10f(power)), value + residual, residual, value, symbol, value - lrintf(value));
 
             if (1 == state) {
                 bytes_expected = symbol + 1;
