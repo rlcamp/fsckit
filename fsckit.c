@@ -36,20 +36,6 @@ int main(void) {
     /* number of unique measurable symbols is 2^bits_per_sweep */
     const size_t S = 1U << bits_per_sweep;
 
-    char * bytes = NULL;
-    size_t linecap = 0;
-    const ssize_t B = getdelim(&bytes, &linecap, 0, stdin);
-    if (B <= 0) exit(EXIT_FAILURE);
-
-    const size_t D = (B * 8 + bits_per_sweep - 1) / bits_per_sweep;
-    assert(D <= S);
-
-    unsigned bits = 0;
-    unsigned short bits_filled = 0;
-
-    /* djb2 */
-    unsigned hash = 5381;
-
     /* oversampling factor, must be an integer for now */
     const size_t L = lrintf(fs / bw);
 
@@ -77,44 +63,59 @@ int main(void) {
     for (size_t ioffset = 0; ioffset < 999; ioffset++)
         fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
 
-    /* emit four unshifted upsweeps, with continuous carrier phase across sweeps */
-    carrier = emit_sweep(carrier, T, advances, 0, 0);
-    carrier = emit_sweep(carrier, T, advances, 0, 0);
-    carrier = emit_sweep(carrier, T, advances, 0, 0);
-    carrier = emit_sweep(carrier, T, advances, 0, 0);
+    /* loop over lines of text on stdin, emitting one message per line */
+    char * bytes = NULL;
+    size_t linecap = 0;
+    ssize_t B;
+    while ((B = getline(&bytes, &linecap, stdin)) > 0) {
+        const size_t D = (B * 8 + bits_per_sweep - 1) / bits_per_sweep;
+        assert(D <= S);
 
-    /* two unshifted downsweeps */
-    carrier = emit_sweep(carrier, T, advances, 0, 1);
-    carrier = emit_sweep(carrier, T, advances, 0, 1);
+        unsigned bits = 0;
+        unsigned short bits_filled = 0;
 
-    /* one upsweep, circularly shifted to encode length of message in bytes */
-    carrier = emit_sweep(carrier, T, advances, (B - 1) * L, 0);
+        /* djb2 */
+        unsigned hash = 5381;
 
-    /* one shifted upsweep per data symbol */
-    for (int ibyte = 0; ibyte < B || bits_filled; ) {
-        while (bits_filled >= bits_per_sweep) {
-            const unsigned symbol = bits & (S - 1U);
-            carrier = emit_sweep(carrier, T, advances, symbol * L, 0);
-            bits >>= bits_per_sweep;
-            bits_filled -= bits_per_sweep;
+        /* emit four unshifted upsweeps, with continuous carrier phase across sweeps */
+        carrier = emit_sweep(carrier, T, advances, 0, 0);
+        carrier = emit_sweep(carrier, T, advances, 0, 0);
+        carrier = emit_sweep(carrier, T, advances, 0, 0);
+        carrier = emit_sweep(carrier, T, advances, 0, 0);
+
+        /* two unshifted downsweeps */
+        carrier = emit_sweep(carrier, T, advances, 0, 1);
+        carrier = emit_sweep(carrier, T, advances, 0, 1);
+
+        /* one upsweep, circularly shifted to encode length of message in bytes */
+        carrier = emit_sweep(carrier, T, advances, (B - 1) * L, 0);
+
+        /* one shifted upsweep per data symbol */
+        for (int ibyte = 0; ibyte < B || bits_filled; ) {
+            while (bits_filled >= bits_per_sweep) {
+                const unsigned symbol = bits & (S - 1U);
+                carrier = emit_sweep(carrier, T, advances, symbol * L, 0);
+                bits >>= bits_per_sweep;
+                bits_filled -= bits_per_sweep;
+            }
+            if (B == ibyte && bits_filled) {
+                /* emit an extra symbol to complete the last byte if there are leftover bits */
+                const unsigned symbol = bits & (1U << bits_filled);
+                carrier = emit_sweep(carrier, T, advances, symbol * L, 0);
+                bits >>= bits_filled;
+                bits_filled = 0;
+            }
+            while (bits_filled < 8 && ibyte < B) {
+                const unsigned char byte = bytes[ibyte++];
+                hash = hash * 33U ^ byte;
+                bits |= byte << bits_filled;
+                bits_filled += 8;
+            }
         }
-        if (B == ibyte && bits_filled) {
-            /* emit an extra symbol to complete the last byte if there are leftover bits */
-            const unsigned symbol = bits & (1U << bits_filled);
-            carrier = emit_sweep(carrier, T, advances, symbol * L, 0);
-            bits >>= bits_filled;
-            bits_filled = 0;
-        }
-        while (bits_filled < 8 && ibyte < B) {
-            const unsigned char byte = bytes[ibyte++];
-            hash = hash * 33U ^ byte;
-            bits |= byte << bits_filled;
-            bits_filled += 8;
-        }
+
+        /* one upsweep for checksum (lowest bits of djb2 of data symbols) */
+        carrier = emit_sweep(carrier, T, advances, (hash & (S - 1U)) * L, 0);
     }
-
-    /* one upsweep for checksum (lowest bits of djb2 of data symbols) */
-    carrier = emit_sweep(carrier, T, advances, (hash & (S - 1U)) * L, 0);
 
     for (size_t ioffset = 0; ioffset < T; ioffset++)
         fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
