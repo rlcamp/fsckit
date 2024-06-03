@@ -82,6 +82,8 @@ int main(void) {
         carrier = emit_sweep(carrier, T, advances, 0, 0);
         carrier = emit_sweep(carrier, T, advances, 0, 0);
         carrier = emit_sweep(carrier, T, advances, 0, 0);
+        carrier = emit_sweep(carrier, T, advances, 0, 0);
+        carrier = emit_sweep(carrier, T, advances, 0, 0);
 
         /* two unshifted downsweeps */
         carrier = emit_sweep(carrier, T, advances, 0, 1);
