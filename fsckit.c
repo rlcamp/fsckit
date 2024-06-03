@@ -100,7 +100,7 @@ int main(void) {
             }
             if (B == ibyte && bits_filled) {
                 /* emit an extra symbol to complete the last byte if there are leftover bits */
-                const unsigned symbol = bits & (1U << bits_filled);
+                const unsigned symbol = bits & ((1U << bits_filled) - 1);
                 carrier = emit_sweep(carrier, T, advances, symbol * L, 0);
                 bits >>= bits_filled;
                 bits_filled = 0;
