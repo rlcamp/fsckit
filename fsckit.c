@@ -68,8 +68,7 @@ int main(void) {
     size_t linecap = 0;
     ssize_t B;
     while ((B = getline(&bytes, &linecap, stdin)) > 0) {
-        const size_t D = (B * 8 + bits_per_sweep - 1) / bits_per_sweep;
-        assert(D <= S);
+        assert((size_t)B <= S);
 
         unsigned bits = 0;
         unsigned short bits_filled = 0;
