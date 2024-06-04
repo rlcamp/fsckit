@@ -21,6 +21,10 @@ static float complex emit_sweep(float complex carrier, const size_t T,
     return carrier;
 }
 
+static unsigned gray(unsigned x) {
+    return x ^ (x >> 1U);
+}
+
 int main(void) {
     /* sample rate */
     float fs = 46875.0f;
@@ -95,21 +99,21 @@ int main(void) {
         carrier = emit_sweep(carrier, T, advances, 0, 1);
 
         /* two upsweeps, circularly shifted to encode length of message in bytes */
-        carrier = emit_sweep(carrier, T, advances, ((B - 1) & (S - 1U)) * L, 0);
-        carrier = emit_sweep(carrier, T, advances, (((B - 1) >> bits_per_sweep) & (S - 1U)) * L, 0);
+        carrier = emit_sweep(carrier, T, advances, gray(((B - 1) & (S - 1U))) * L, 0);
+        carrier = emit_sweep(carrier, T, advances, gray((((B - 1) >> bits_per_sweep) & (S - 1U))) * L, 0);
 
         /* one shifted upsweep per data symbol */
         for (size_t ibyte = 0; ibyte < B || bits_filled; ) {
             while (bits_filled >= bits_per_sweep) {
                 const unsigned symbol = bits & (S - 1U);
-                carrier = emit_sweep(carrier, T, advances, symbol * L, 0);
+                carrier = emit_sweep(carrier, T, advances, gray(symbol) * L, 0);
                 bits >>= bits_per_sweep;
                 bits_filled -= bits_per_sweep;
             }
             if (B == ibyte && bits_filled) {
                 /* emit an extra symbol to complete the last byte if there are leftover bits */
                 const unsigned symbol = bits & ((1U << bits_filled) - 1);
-                carrier = emit_sweep(carrier, T, advances, symbol * L, 0);
+                carrier = emit_sweep(carrier, T, advances, gray(symbol) * L, 0);
                 bits >>= bits_filled;
                 bits_filled = 0;
             }
@@ -122,7 +126,7 @@ int main(void) {
         }
 
         /* one upsweep for checksum (lowest bits of djb2 of data symbols) */
-        carrier = emit_sweep(carrier, T, advances, (hash & (S - 1U)) * L, 0);
+        carrier = emit_sweep(carrier, T, advances, gray((hash & (S - 1U))) * L, 0);
 
         bytes += B;
     }

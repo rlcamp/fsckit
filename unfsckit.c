@@ -122,6 +122,11 @@ static float complex cfilter(const float complex x, float complex vprev[2],
     return y;
 }
 
+static unsigned degray(unsigned x) {
+    for (unsigned m = x; m; m >>= 1, x ^= m);
+    return x;
+}
+
 void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t *, void *), void * get_ctx,
                      void (* put_bytes_func)(const unsigned char *, const size_t, void *), void * put_ctx,
                      const float sample_rate, const float f_carrier, const float bandwidth,
@@ -289,7 +294,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     else downsweep_prev = value_dn;
                 }
             } else {
-                const unsigned symbol = (lrintf(value + S)) % S;
+                const unsigned symbol = degray((lrintf(value + S)) % S);
                 fprintf(stderr, "%s: %ld mdB, %.2f - %.2f = %.2f -> %u, residual error %.2f\r\n", __func__, lrintf(1e3 * log10f(power)), value + residual, residual, value, symbol, value - lrintf(value));
 
                 /* nudge residual toward error in this bit */
