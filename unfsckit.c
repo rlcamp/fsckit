@@ -255,15 +255,15 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         /* TODO: do a running average of the residual over all preamble
                          upsweeps instead of just using the most recent value */
 
-                        if (upsweeps >= 2 && shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
+                        if (upsweeps >= 2 && shift) fprintf(stderr, "%s: shifting by %d\r\n", __func__, shift);
 
-                        fprintf(stderr, "%s: upsweep at %u: %ld mB, %.2f, total now %u\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power)), value, upsweeps);
+                        fprintf(stderr, "%s: upsweep at %u: %ld mB, %.2f, total now %u\r\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power)), value, upsweeps);
                     }
                 } else {
                     /* got a downsweep */
                     downsweeps++;
 
-                    fprintf(stderr, "%s: downsweep at %u: %ld mB, %.2f, total now %u\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power_dn)), value_dn, downsweeps);
+                    fprintf(stderr, "%s: downsweep at %u: %ld mB, %.2f, total now %u\r\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power_dn)), value_dn, downsweeps);
 
                     if (2 == downsweeps && fabsf(remainderf(value_dn - downsweep_prev, S)) < 2.0f) {
                         /* the value detected here allows us to disambiguate between
@@ -275,7 +275,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         ih_next_frame += shift;
                         residual += (float)shift / L;
 
-                        fprintf(stderr, "%s: shifted by %d, next frame at %u, residual is %.2f\n", __func__,
+                        fprintf(stderr, "%s: shifted by %d, next frame at %u, residual is %.2f\r\n", __func__,
                                 shift, (unsigned)ih_next_frame, residual);
 
                         state++;
@@ -290,12 +290,12 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 }
             } else {
                 const unsigned symbol = (lrintf(value + S)) % S;
-                fprintf(stderr, "%s: %ld mdB, %.2f - %.2f = %.2f -> %u, residual error %.2f\n", __func__, lrintf(1e3 * log10f(power)), value + residual, residual, value, symbol, value - lrintf(value));
+                fprintf(stderr, "%s: %ld mdB, %.2f - %.2f = %.2f -> %u, residual error %.2f\r\n", __func__, lrintf(1e3 * log10f(power)), value + residual, residual, value, symbol, value - lrintf(value));
 
                 if (1 == state) {
                     bytes_expected = symbol + 1;
                     const unsigned data_symbols_expected = (bytes_expected * 8 + bits_per_sweep - 1) / bits_per_sweep;
-                    fprintf(stderr, "%s: reading %u bytes in %u symbols\n", __func__, bytes_expected, data_symbols_expected);
+                    fprintf(stderr, "%s: reading %u bytes in %u symbols\r\n", __func__, bytes_expected, data_symbols_expected);
 
                     /* initial value for djb2 checksum */
                     hash = 5381;
@@ -313,7 +313,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         /* update djb2 hash of data bytes */
                         hash = hash * 33U ^ byte;
 
-                        fprintf(stderr, "%s: data byte %u/%u: %u\n", __func__, ibyte, bytes_expected, byte);
+                        fprintf(stderr, "%s: data byte %u/%u: %u\r\n", __func__, ibyte, bytes_expected, byte);
 
                         bits >>= 8;
                         bits_filled -= 8;
@@ -326,7 +326,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     /* use low bits of djb2 hash as checksum */
                     const unsigned hash_low_bits = hash & (S - 1U);
 
-                    fprintf(stderr, "%s: parity received: %u, calculated %u, %s\n", __func__,
+                    fprintf(stderr, "%s: parity received: %u, calculated %u, %s\r\n", __func__,
                             symbol, hash_low_bits, symbol == hash_low_bits ? "pass" : "fail");
 
                     if (symbol == hash_low_bits)
