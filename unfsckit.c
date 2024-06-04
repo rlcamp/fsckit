@@ -188,152 +188,152 @@ static void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), voi
 
     int16_t sample_prev = 0;
 
-    int16_t * samples, * end = NULL;
-    while ((samples = get_next_sample_func(&end, ctx))) for (; samples != end; samples++) {
-        const int16_t sample = *samples;
-        /* multiply incoming real-valued sample by local oscillator for basebanding */
-        float complex filtered = (sample - sample_prev) * conjf(carrier);
-        sample_prev = sample;
-        carrier = renormalize(carrier * advance);
+    for (int16_t * samples, * end; (samples = get_next_sample_func(&end, ctx));)
+        for (; samples != end; samples++) {
+            const int16_t sample = *samples;
+            /* multiply incoming real-valued sample by local oscillator for basebanding */
+            float complex filtered = (sample - sample_prev) * conjf(carrier);
+            sample_prev = sample;
+            carrier = renormalize(carrier * advance);
 
-        /* apply the biquad filter stages to reject stuff outside the passband */
-        for (size_t is = 0; is < 4; is++)
-            filtered = cfilter(filtered, vprev[is], num[is], den[is]);
+            /* apply the biquad filter stages to reject stuff outside the passband */
+            for (size_t is = 0; is < 4; is++)
+                filtered = cfilter(filtered, vprev[is], num[is], den[is]);
 
-        /* decimate the filter output to a small integer multiple of nyquist rate */
-        input_samples_since_filtered_sample++;
-        if (input_samples_since_filtered_sample + 0.5f < input_samples_per_filtered_sample) continue;
-        input_samples_since_filtered_sample -= input_samples_per_filtered_sample;
+            /* decimate the filter output to a small integer multiple of nyquist rate */
+            input_samples_since_filtered_sample++;
+            if (input_samples_since_filtered_sample + 0.5f < input_samples_per_filtered_sample) continue;
+            input_samples_since_filtered_sample -= input_samples_per_filtered_sample;
 
-        /* store the basebanded filtered decimated samples in a ring buffer */
-        history[(ih++) % (S * L)] = filtered;
+            /* store the basebanded filtered decimated samples in a ring buffer */
+            history[(ih++) % (S * L)] = filtered;
 
-         /* wait for the buffer to be aligned with the next expected frame */
-        if (ih != ih_next_frame) continue;
-        ih_next_frame += S * L;
+            /* wait for the buffer to be aligned with the next expected frame */
+            if (ih != ih_next_frame) continue;
+            ih_next_frame += S * L;
 
-        /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
-        dechirp(S, L, fft_input, history, ih, advances, 0);
+            /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
+            dechirp(S, L, fft_input, history, ih, advances, 0);
 
-        /* do an fft of the dechirped symbol frame */
-        fft_evaluate_forward(fft_output, fft_input, plan);
+            /* do an fft of the dechirped symbol frame */
+            fft_evaluate_forward(fft_output, fft_input, plan);
 
-        /* find index (incl estimating the fractional part) of the loudest fft bin */
-        float power = 0;
-        const float value = remainderf(circular_argmax_of_complex_vector(&power, S, fft_output) - residual, S);
+            /* find index (incl estimating the fractional part) of the loudest fft bin */
+            float power = 0;
+            const float value = remainderf(circular_argmax_of_complex_vector(&power, S, fft_output) - residual, S);
 
-        if (!power) continue;
+            if (!power) continue;
 
-        /* if listening for preamble... */
-        if (0 == state) {
-            /* if three or more agreeing upsweeps have been detected, also listen for downsweeps */
-            float power_dn = 0, value_dn = FLT_MAX;
-            if (upsweeps >= 3) {
-                dechirp(S, L, fft_input, history, ih, advances, 1);
-                fft_evaluate_forward(fft_output, fft_input, plan);
-                value_dn = remainderf(circular_argmax_of_complex_vector(&power_dn, S, fft_output) + residual, S);
-            }
+            /* if listening for preamble... */
+            if (0 == state) {
+                /* if three or more agreeing upsweeps have been detected, also listen for downsweeps */
+                float power_dn = 0, value_dn = FLT_MAX;
+                if (upsweeps >= 3) {
+                    dechirp(S, L, fft_input, history, ih, advances, 1);
+                    fft_evaluate_forward(fft_output, fft_input, plan);
+                    value_dn = remainderf(circular_argmax_of_complex_vector(&power_dn, S, fft_output) + residual, S);
+                }
 
-            /* if not yet detecting downsweeps, or upsweep was notably louder than possible downsweep... */
-            if (power >= 2.0f * power_dn) {
-                /* got an upsweep */
-                downsweeps = 0;
+                /* if not yet detecting downsweeps, or upsweep was notably louder than possible downsweep... */
+                if (power >= 2.0f * power_dn) {
+                    /* got an upsweep */
+                    downsweeps = 0;
 
-                const float shift_unquantized = value * L;
-                const int shift = lrintf(shift_unquantized);
-                ih_next_frame -= shift;
-                residual += (shift_unquantized - shift) / L;
+                    const float shift_unquantized = value * L;
+                    const int shift = lrintf(shift_unquantized);
+                    ih_next_frame -= shift;
+                    residual += (shift_unquantized - shift) / L;
 
-                if (fabsf(value) >= 0.5f)
-                    upsweeps = 1;
-                else {
-                    upsweeps++;
-                    /* TODO: do a running average of the residual over all preamble
-                     upsweeps instead of just using the most recent value */
+                    if (fabsf(value) >= 0.5f)
+                        upsweeps = 1;
+                    else {
+                        upsweeps++;
+                        /* TODO: do a running average of the residual over all preamble
+                         upsweeps instead of just using the most recent value */
 
-                    if (upsweeps >= 2 && shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
+                        if (upsweeps >= 2 && shift) fprintf(stderr, "%s: shifting by %d\n", __func__, shift);
 
-                    fprintf(stderr, "%s: upsweep at %u: %ld mB, %.2f, total now %u\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power)), value, upsweeps);
+                        fprintf(stderr, "%s: upsweep at %u: %ld mB, %.2f, total now %u\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power)), value, upsweeps);
+                    }
+                } else {
+                    /* got a downsweep */
+                    downsweeps++;
+
+                    fprintf(stderr, "%s: downsweep at %u: %ld mB, %.2f, total now %u\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power_dn)), value_dn, downsweeps);
+
+                    if (2 == downsweeps && fabsf(remainderf(value_dn - downsweep_prev, S)) < 2.0f) {
+                        /* the value detected here allows us to disambiguate between
+                         timing error and carrier offset error, and correct both */
+
+                        const float shift_unquantized = 0.5f * value_dn * L;
+                        const int shift = lrintf(shift_unquantized);
+
+                        ih_next_frame += shift;
+                        residual += (float)shift / L;
+
+                        fprintf(stderr, "%s: shifted by %d, next frame at %u, residual is %.2f\n", __func__,
+                                shift, (unsigned)ih_next_frame, residual);
+
+                        state++;
+                    }
+                    else if (2 == downsweeps) {
+                        /* just reset and go back to listening for upsweeps */
+                        upsweeps = 0;
+                        downsweeps = 0;
+                        residual = 0;
+                    }
+                    else downsweep_prev = value_dn;
                 }
             } else {
-                /* got a downsweep */
-                downsweeps++;
+                const unsigned symbol = (lrintf(value + S)) % S;
+                fprintf(stderr, "%s: %ld mdB, %.2f - %.2f = %.2f -> %u, residual error %.2f\n", __func__, lrintf(1e3 * log10f(power)), value + residual, residual, value, symbol, value - lrintf(value));
 
-                fprintf(stderr, "%s: downsweep at %u: %ld mB, %.2f, total now %u\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power_dn)), value_dn, downsweeps);
+                if (1 == state) {
+                    bytes_expected = symbol + 1;
+                    const unsigned data_symbols_expected = (bytes_expected * 8 + bits_per_sweep - 1) / bits_per_sweep;
+                    fprintf(stderr, "%s: reading %u bytes in %u symbols\n", __func__, bytes_expected, data_symbols_expected);
 
-                if (2 == downsweeps && fabsf(remainderf(value_dn - downsweep_prev, S)) < 2.0f) {
-                    /* the value detected here allows us to disambiguate between
-                     timing error and carrier offset error, and correct both */
-
-                    const float shift_unquantized = 0.5f * value_dn * L;
-                    const int shift = lrintf(shift_unquantized);
-
-                    ih_next_frame += shift;
-                    residual += (float)shift / L;
-
-                    fprintf(stderr, "%s: shifted by %d, next frame at %u, residual is %.2f\n", __func__,
-                            shift, (unsigned)ih_next_frame, residual);
-
+                    /* initial value for djb2 checksum */
+                    hash = 5381;
+                    ibyte = 0;
+                    bits = 0;
+                    bits_filled = 0;
                     state++;
                 }
-                else if (2 == downsweeps) {
-                    /* just reset and go back to listening for upsweeps */
+                else if (2 == state) {
+                    bits |= symbol << bits_filled;
+                    bits_filled += bits_per_sweep;
+                    if (bits_filled >= 8) {
+                        const unsigned char byte = bits & 0xff;
+
+                        /* update djb2 hash of data bytes */
+                        hash = hash * 33U ^ byte;
+
+                        fprintf(stderr, "%s: data byte %u/%u: %u\n", __func__, ibyte, bytes_expected, byte);
+                        fputc(byte, stdout);
+
+                        bits >>= 8;
+                        bits_filled -= 8;
+                        ibyte++;
+                    }
+
+                    if (bytes_expected == ibyte) state++;
+                }
+                else if (3 == state) {
+                    /* use low bits of djb2 hash as checksum */
+                    const unsigned hash_low_bits = hash & (S - 1U);
+
+                    fprintf(stderr, "%s: parity received: %u, calculated %u, %s\n", __func__,
+                            symbol, hash_low_bits, symbol == hash_low_bits ? "pass" : "fail");
+
+                    /* reset and wait for next packet */
+                    state = 0;
                     upsweeps = 0;
                     downsweeps = 0;
                     residual = 0;
                 }
-                else downsweep_prev = value_dn;
-            }
-        } else {
-            const unsigned symbol = (lrintf(value + S)) % S;
-            fprintf(stderr, "%s: %ld mdB, %.2f - %.2f = %.2f -> %u, residual error %.2f\n", __func__, lrintf(1e3 * log10f(power)), value + residual, residual, value, symbol, value - lrintf(value));
-
-            if (1 == state) {
-                bytes_expected = symbol + 1;
-                const unsigned data_symbols_expected = (bytes_expected * 8 + bits_per_sweep - 1) / bits_per_sweep;
-                fprintf(stderr, "%s: reading %u bytes in %u symbols\n", __func__, bytes_expected, data_symbols_expected);
-
-                /* initial value for djb2 checksum */
-                hash = 5381;
-                ibyte = 0;
-                bits = 0;
-                bits_filled = 0;
-                state++;
-            }
-            else if (2 == state) {
-                bits |= symbol << bits_filled;
-                bits_filled += bits_per_sweep;
-                if (bits_filled >= 8) {
-                    const unsigned char byte = bits & 0xff;
-
-                    /* update djb2 hash of data bytes */
-                    hash = hash * 33U ^ byte;
-
-                    fprintf(stderr, "%s: data byte %u/%u: %u\n", __func__, ibyte, bytes_expected, byte);
-                    fputc(byte, stdout);
-
-                    bits >>= 8;
-                    bits_filled -= 8;
-                    ibyte++;
-                }
-
-                if (bytes_expected == ibyte) state++;
-            }
-            else if (3 == state) {
-                /* use low bits of djb2 hash as checksum */
-                const unsigned hash_low_bits = hash & (S - 1U);
-
-                fprintf(stderr, "%s: parity received: %u, calculated %u, %s\n", __func__,
-                        symbol, hash_low_bits, symbol == hash_low_bits ? "pass" : "fail");
-
-                /* reset and wait for next packet */
-                state = 0;
-                upsweeps = 0;
-                downsweeps = 0;
-                residual = 0;
             }
         }
-    }
 
     destroy_planned_forward_fft(plan);
     free(advances);
