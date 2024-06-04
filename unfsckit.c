@@ -181,8 +181,6 @@ static void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), voi
 
     float downsweep_prev = 0;
 
-    setvbuf(stdin, NULL, _IONBF, 0);
-
     unsigned bits = 0;
     unsigned short bits_filled = 0;
 
@@ -356,6 +354,8 @@ int main(void) {
 
     /* input arguments, all in cycles, samples, or symbols per second */
     const float sample_rate = 46875, f_carrier = 3662.11f, bandwidth = 366.211;
+
+    setvbuf(stdin, NULL, _IONBF, 0);
 
     int16_t buf[32];
     unfsckit(get_samples_from_stdin, buf, sample_rate, f_carrier, bandwidth, bits_per_sweep);
