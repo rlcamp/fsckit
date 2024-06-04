@@ -15,7 +15,7 @@ static float complex emit_sweep(float complex carrier, const size_t T,
                                 const float complex advances[restrict static T],
                                 const size_t shift, const int down) {
     for (size_t it = 0; it < T; it++) {
-        fwrite(&(int16_t) { lrintf(crealf(carrier) * 32767.0f) }, sizeof(int16_t), 1, stdout);
+        fwrite(&(int16_t) { lrintf(crealf(carrier) * 32767.0f * 0.25f) }, sizeof(int16_t), 1, stdout);
         carrier = renormalize(carrier * advances[((down ? T - it : it) + shift) % T]);
     }
     return carrier;
@@ -74,7 +74,7 @@ int main(void) {
             bytes = line;
         }
         const size_t line_remaining = strlen(bytes);
-        const size_t B = line_remaining <= S ? line_remaining : S;
+        const size_t B = line_remaining <= 256 ? line_remaining : 256;
 
         unsigned bits = 0;
         unsigned short bits_filled = 0;
@@ -94,8 +94,9 @@ int main(void) {
         carrier = emit_sweep(carrier, T, advances, 0, 1);
         carrier = emit_sweep(carrier, T, advances, 0, 1);
 
-        /* one upsweep, circularly shifted to encode length of message in bytes */
-        carrier = emit_sweep(carrier, T, advances, (B - 1) * L, 0);
+        /* two upsweeps, circularly shifted to encode length of message in bytes */
+        carrier = emit_sweep(carrier, T, advances, ((B - 1) & (S - 1U)) * L, 0);
+        carrier = emit_sweep(carrier, T, advances, (((B - 1) >> bits_per_sweep) & (S - 1U)) * L, 0);
 
         /* one shifted upsweep per data symbol */
         for (size_t ibyte = 0; ibyte < B || bits_filled; ) {

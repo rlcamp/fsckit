@@ -147,7 +147,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     const float input_samples_per_filtered_sample = sample_rate / sample_rate_filtered;
 
     const size_t bytes_expected_max = S;
-    unsigned char * bytes = malloc(bytes_expected_max);
+    unsigned char * bytes = malloc(256);
 
     struct planned_forward_fft * plan = plan_forward_fft_of_length(S);
     float complex * restrict const history = malloc(sizeof(float complex) * S * L);
@@ -293,16 +293,21 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 fprintf(stderr, "%s: %ld mdB, %.2f - %.2f = %.2f -> %u, residual error %.2f\r\n", __func__, lrintf(1e3 * log10f(power)), value + residual, residual, value, symbol, value - lrintf(value));
 
                 if (1 == state) {
-                    bytes_expected = symbol + 1;
-                    const unsigned data_symbols_expected = (bytes_expected * 8 + bits_per_sweep - 1) / bits_per_sweep;
-                    fprintf(stderr, "%s: reading %u bytes in %u symbols\r\n", __func__, bytes_expected, data_symbols_expected);
+                    bits |= symbol << bits_filled;
+                    bits_filled += bits_per_sweep;
 
-                    /* initial value for djb2 checksum */
-                    hash = 5381;
-                    ibyte = 0;
-                    bits = 0;
-                    bits_filled = 0;
-                    state++;
+                    if (bits_filled == 2 * bits_per_sweep) {
+                        bytes_expected = bits + 1;
+                        const unsigned data_symbols_expected = (bytes_expected * 8 + bits_per_sweep - 1) / bits_per_sweep;
+                        fprintf(stderr, "%s: reading %u bytes in %u symbols\r\n", __func__, bytes_expected, data_symbols_expected);
+
+                        /* initial value for djb2 checksum */
+                        hash = 5381;
+                        ibyte = 0;
+                        bits = 0;
+                        bits_filled = 0;
+                        state++;
+                    }
                 }
                 else if (2 == state) {
                     bits |= symbol << bits_filled;
@@ -337,6 +342,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     upsweeps = 0;
                     downsweeps = 0;
                     residual = 0;
+                    bits = 0;
+                    bits_filled = 0;
                 }
             }
         }
