@@ -1,4 +1,5 @@
 /* minimum viable usage: printf 'hello\n' | ./fsckit | ./unfsckit */
+#include "unfsckit.h"
 #include "fft_anywhere.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -121,7 +122,7 @@ static float complex cfilter(const float complex x, float complex vprev[2],
     return y;
 }
 
-static void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), void * get_ctx,
+void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), void * get_ctx,
                      void (* put_bytes_func)(const unsigned char *, const size_t, void *), void * put_ctx,
                      const float sample_rate, const float f_carrier, const float bandwidth,
                      const unsigned bits_per_sweep) {

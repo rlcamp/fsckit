@@ -35,7 +35,7 @@ unfsckit : unfsckit.o fft_anywhere.o
 
 fft_anywhere.o : fft_anywhere.h
 fsckit.o :
-unfsckit.o : fft_anywhere.h
+unfsckit.o : fft_anywhere.h unfsckit.h
 
 *.o : Makefile
 
