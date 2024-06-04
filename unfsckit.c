@@ -292,6 +292,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 const unsigned symbol = (lrintf(value + S)) % S;
                 fprintf(stderr, "%s: %ld mdB, %.2f - %.2f = %.2f -> %u, residual error %.2f\r\n", __func__, lrintf(1e3 * log10f(power)), value + residual, residual, value, symbol, value - lrintf(value));
 
+                /* nudge residual toward error in this bit */
+                residual += 0.5f * (value - lrintf(value));
+
                 if (1 == state) {
                     bits |= symbol << bits_filled;
                     bits_filled += bits_per_sweep;
