@@ -323,7 +323,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         /* update djb2 hash of data bytes */
                         hash = hash * 33U ^ byte;
 
-                        fprintf(stderr, "%s: data byte %u/%u: %u\r\n", __func__, ibyte, bytes_expected, byte);
+                        fprintf(stderr, "%s: %u/%u: %u, err %ld ppt\r\n", __func__, ibyte, bytes_expected, byte, lrintf((value - lrintf(value)) * 1e3f));
 
                         bits >>= 8;
                         bits_filled -= 8;
