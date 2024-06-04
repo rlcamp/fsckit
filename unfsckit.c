@@ -353,6 +353,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     free(fft_output);
     free(fft_input);
     free(history);
+    free(bytes);
 }
 
 static const int16_t * get_samples_from_stdin(const int16_t ** end_p, size_t * stride_p, void * ctx) {
