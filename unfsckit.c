@@ -121,13 +121,11 @@ static float complex cfilter(const float complex x, float complex vprev[2],
     return y;
 }
 
-int main(void) {
-    const unsigned bits_per_sweep = 5;
+static void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), void * ctx,
+                     const float sample_rate, const float f_carrier, const float bandwidth,
+                     const unsigned bits_per_sweep) {
     const size_t S = 1U << bits_per_sweep; /* number of unique measurable symbols */
     /* critically sampled also means there are S complex samples of the band per symbol */
-
-    /* input arguments, all in cycles, samples, or symbols per second */
-    const float sample_rate = 46875, f_carrier = 3662.11f, bandwidth = 366.211;
 
     /* optional intermediate oversampling factor. must be a power of 2, but can be 1. using
      a value larger than 1 allows finer time alignment of the input to the demodulator, at
@@ -188,8 +186,11 @@ int main(void) {
     unsigned bits = 0;
     unsigned short bits_filled = 0;
 
-    int16_t sample_prev = 0, sample;
-    while (fread(&sample, sizeof(int16_t), 1, stdin)) {
+    int16_t sample_prev = 0;
+
+    int16_t * samples, * end = NULL;
+    while ((samples = get_next_sample_func(&end, ctx))) for (; samples != end; samples++) {
+        const int16_t sample = *samples;
         /* multiply incoming real-valued sample by local oscillator for basebanding */
         float complex filtered = (sample - sample_prev) * conjf(carrier);
         sample_prev = sample;
@@ -339,4 +340,23 @@ int main(void) {
     free(fft_output);
     free(fft_input);
     free(history);
+}
+
+static int16_t * get_samples_from_stdin(int16_t ** end_p, void * ctx) {
+    int16_t * buf = ctx;
+    const ssize_t ret = fread(buf, sizeof(int16_t), 32, stdin);
+    if (ret <= 0) return NULL;
+    *end_p = buf + ret;
+    return buf;
+}
+
+__attribute((weak))
+int main(void) {
+    const unsigned bits_per_sweep = 5;
+
+    /* input arguments, all in cycles, samples, or symbols per second */
+    const float sample_rate = 46875, f_carrier = 3662.11f, bandwidth = 366.211;
+
+    int16_t buf[32];
+    unfsckit(get_samples_from_stdin, buf, sample_rate, f_carrier, bandwidth, bits_per_sweep);
 }
