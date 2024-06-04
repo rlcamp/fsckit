@@ -146,8 +146,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
     const float input_samples_per_filtered_sample = sample_rate / sample_rate_filtered;
 
-    const size_t bytes_expected_max = S;
-    unsigned char * bytes = malloc(256);
+    const size_t bytes_expected_max = 256;
+    unsigned char * bytes = malloc(bytes_expected_max);
 
     struct planned_forward_fft * plan = plan_forward_fft_of_length(S);
     float complex * restrict const history = malloc(sizeof(float complex) * S * L);
