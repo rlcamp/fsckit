@@ -191,8 +191,9 @@ void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), void * get
 
     int16_t sample_prev = 0;
 
-    for (int16_t * samples, * end; (samples = get_next_sample_func(&end, get_ctx));)
-        for (; samples != end; samples++) {
+    size_t stride;
+    for (int16_t * samples, * end; (samples = get_next_sample_func(&end, &stride, get_ctx));)
+        for (; samples != end; samples += stride) {
             const int16_t sample = *samples;
             /* multiply incoming real-valued sample by local oscillator for basebanding */
             float complex filtered = (sample - sample_prev) * conjf(carrier);
@@ -347,11 +348,12 @@ void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), void * get
     free(history);
 }
 
-static int16_t * get_samples_from_stdin(int16_t ** end_p, void * ctx) {
+static int16_t * get_samples_from_stdin(int16_t ** end_p, size_t * stride_p, void * ctx) {
     int16_t * buf = ctx;
     const ssize_t ret = fread(buf, sizeof(int16_t), 32, stdin);
     if (ret <= 0) return NULL;
     *end_p = buf + ret;
+    *stride_p = 1;
     return buf;
 }
 
