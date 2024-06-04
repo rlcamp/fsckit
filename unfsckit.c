@@ -301,6 +301,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                     if (bits_filled == 2 * bits_per_sweep) {
                         bytes_expected = bits + 1;
+                        if (bytes_expected > bytes_expected_max)
+                            bytes_expected = 0;
                         const unsigned data_symbols_expected = (bytes_expected * 8 + bits_per_sweep - 1) / bits_per_sweep;
                         fprintf(stderr, "%s: reading %u bytes in %u symbols\r\n", __func__, bytes_expected, data_symbols_expected);
 
