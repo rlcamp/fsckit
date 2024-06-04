@@ -121,7 +121,8 @@ static float complex cfilter(const float complex x, float complex vprev[2],
     return y;
 }
 
-static void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), void * ctx,
+static void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), void * get_ctx,
+                     void (* put_bytes_func)(const unsigned char *, const size_t, void *), void * put_ctx,
                      const float sample_rate, const float f_carrier, const float bandwidth,
                      const unsigned bits_per_sweep) {
     const size_t S = 1U << bits_per_sweep; /* number of unique measurable symbols */
@@ -143,6 +144,9 @@ static void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), voi
     butterworth_biquads(num, den, 4, sample_rate, 0.75f * bandwidth);
 
     const float input_samples_per_filtered_sample = sample_rate / sample_rate_filtered;
+
+    const size_t bytes_expected_max = S;
+    unsigned char * bytes = malloc(bytes_expected_max);
 
     struct planned_forward_fft * plan = plan_forward_fft_of_length(S);
     float complex * restrict const history = malloc(sizeof(float complex) * S * L);
@@ -186,7 +190,7 @@ static void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), voi
 
     int16_t sample_prev = 0;
 
-    for (int16_t * samples, * end; (samples = get_next_sample_func(&end, ctx));)
+    for (int16_t * samples, * end; (samples = get_next_sample_func(&end, get_ctx));)
         for (; samples != end; samples++) {
             const int16_t sample = *samples;
             /* multiply incoming real-valued sample by local oscillator for basebanding */
@@ -308,11 +312,10 @@ static void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), voi
                         hash = hash * 33U ^ byte;
 
                         fprintf(stderr, "%s: data byte %u/%u: %u\n", __func__, ibyte, bytes_expected, byte);
-                        fputc(byte, stdout);
 
                         bits >>= 8;
                         bits_filled -= 8;
-                        ibyte++;
+                        bytes[ibyte++] = byte;
                     }
 
                     if (bytes_expected == ibyte) state++;
@@ -323,6 +326,9 @@ static void unfsckit(int16_t * (* get_next_sample_func)(int16_t **, void *), voi
 
                     fprintf(stderr, "%s: parity received: %u, calculated %u, %s\n", __func__,
                             symbol, hash_low_bits, symbol == hash_low_bits ? "pass" : "fail");
+
+                    if (symbol == hash_low_bits)
+                        put_bytes_func(bytes, bytes_expected, put_ctx);
 
                     /* reset and wait for next packet */
                     state = 0;
@@ -348,6 +354,11 @@ static int16_t * get_samples_from_stdin(int16_t ** end_p, void * ctx) {
     return buf;
 }
 
+static void put_bytes_to_stdout(const unsigned char * bytes, const size_t B, void * ctx) {
+    (void)ctx;
+    fwrite(bytes, 1, B, stdout);
+}
+
 __attribute((weak))
 int main(void) {
     const unsigned bits_per_sweep = 5;
@@ -358,5 +369,9 @@ int main(void) {
     setvbuf(stdin, NULL, _IONBF, 0);
 
     int16_t buf[32];
-    unfsckit(get_samples_from_stdin, buf, sample_rate, f_carrier, bandwidth, bits_per_sweep);
+    unfsckit(get_samples_from_stdin, buf,
+             put_bytes_to_stdout, NULL,
+             sample_rate, f_carrier, bandwidth, bits_per_sweep);
+
+    fputc('\n', stdout);
 }
