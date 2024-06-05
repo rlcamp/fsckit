@@ -139,8 +139,8 @@ int main(void) {
         }
 
         /* one upsweep for checksum (lowest bits of djb2 of data symbols) */
-        bits = hash & (S - 1U);
-        bits_filled = bits_per_sweep;
+        bits = hash & 0xff;
+        bits_filled = 8;
         while (bits_filled) {
             const unsigned now = bits_filled > bits_per_sweep ? bits_per_sweep : bits_filled;
             carrier = emit_symbol(carrier, T, advances, bits & ((1U << now) - 1), L);

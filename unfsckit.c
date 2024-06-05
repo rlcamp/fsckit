@@ -345,11 +345,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     }
                 }
                 else if (3 == state) {
-                    if (bits_filled >= bits_per_sweep) {
+                    if (bits_filled >= 8) {
                         const unsigned char byte = bits & 0xff;
 
                         /* use low bits of djb2 hash as checksum */
-                        const unsigned hash_low_bits = hash & (S - 1U);
+                        const unsigned hash_low_bits = hash & 0xff;
 
                         fprintf(stderr, "%s: parity received: %u, calculated %u, %s\r\n", __func__,
                                 symbol, hash_low_bits, byte == hash_low_bits ? "pass" : "fail");
