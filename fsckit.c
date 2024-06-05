@@ -31,6 +31,16 @@ static float complex emit_symbol(float complex carrier, const size_t T,
     return emit_sweep(carrier, T, advances, gray(symbol) * L, 0);
 }
 
+static unsigned char hamming(unsigned char x) {
+    return x | ((((x >> 0U) ^ (x >> 1U) ^ (x >> 2U)) & 0x1) << 4U |
+                (((x >> 1U) ^ (x >> 2U) ^ (x >> 3U)) & 0x1) << 5U |
+                (((x >> 0U) ^ (x >> 1U) ^ (x >> 3U)) & 0x1) << 6U);
+}
+
+static unsigned hamming_one_full_byte(unsigned char x) {
+    return hamming(x & 0xF) | (hamming(x >> 4U) << 7U);
+}
+
 int main(void) {
     /* sample rate */
     float fs = 46875.0f;
@@ -105,35 +115,35 @@ int main(void) {
         carrier = emit_sweep(carrier, T, advances, 0, 1);
 
         /* some upsweeps, circularly shifted to encode length of message in bytes */
-        bits = B - 1;
-        bits_filled = 8;
+        bits = hamming_one_full_byte(B - 1);
+        bits_filled = 14;
 
         /* one shifted upsweep per data symbol */
-        for (size_t ibyte = 0; ibyte < B || bits_filled; ) {
+        for (size_t ibyte = 0, hash_enqueued = 0; bits_filled || !hash_enqueued; ) {
             while (bits_filled >= bits_per_sweep) {
                 const unsigned symbol = bits & (S - 1U);
                 carrier = emit_symbol(carrier, T, advances, symbol, L);
                 bits >>= bits_per_sweep;
                 bits_filled -= bits_per_sweep;
             }
-            if (B == ibyte && bits_filled) {
+            if (hash_enqueued && bits_filled) {
                 /* emit an extra symbol to complete the last byte if there are leftover bits */
                 const unsigned symbol = bits & ((1U << bits_filled) - 1);
                 carrier = emit_symbol(carrier, T, advances, symbol, L);
                 bits >>= bits_filled;
                 bits_filled = 0;
             }
-            while (bits_filled < 8 && ibyte < B) {
+            if (bits_filled < 14 && ibyte < B) {
                 const unsigned char byte = bytes[ibyte++];
                 hash = hash * 33U ^ byte;
-                bits |= byte << bits_filled;
-                bits_filled += 8;
-
-                if (ibyte == B) {
-                    /* one byte for checksum (lowest bits of djb2 of data bytes) */
-                    bits |= hash << bits_filled;
-                    bits_filled += 8;
-                }
+                bits |= hamming_one_full_byte(byte) << bits_filled;
+                bits_filled += 14;
+            }
+            else if (bits_filled < 14 && ibyte == B && !hash_enqueued) {
+                /* one byte for checksum (lowest bits of djb2 of data bytes) */
+                bits |= hamming_one_full_byte(hash) << bits_filled;
+                bits_filled += 14;
+                hash_enqueued = 1;
             }
         }
 

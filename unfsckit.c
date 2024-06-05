@@ -135,6 +135,47 @@ static unsigned degray(unsigned x) {
     return x;
 }
 
+static float soft_bit_decision_from_fft(const size_t ibit, const size_t S, const float complex s[restrict static S]) {
+    float power_zero = 0, power_one = 0;
+    for (size_t is = 0; is < S; is++)
+    /* if this bit is set in the gray code of this symbol... */
+        if (degray(is) & (1U << ibit))
+            power_one += cmagsquaredf(s[is]);
+        else
+            power_zero += cmagsquaredf(s[is]);
+
+    const float denominator = power_zero + power_one;
+    return denominator ? (power_zero - power_one) / denominator : 0.0f;
+}
+
+static unsigned char hamming(unsigned char x) {
+    return x | ((((x >> 0U) ^ (x >> 1U) ^ (x >> 2U)) & 0x1) << 4U |
+                (((x >> 1U) ^ (x >> 2U) ^ (x >> 3U)) & 0x1) << 5U |
+                (((x >> 0U) ^ (x >> 1U) ^ (x >> 3U)) & 0x1) << 6U);
+}
+
+static unsigned char soft_decode_hamming_naive(const size_t ih_bit, const float soft_bit_history[restrict static 32]) {
+    /* this could be replaced with well anything */
+    float best = 0;
+    unsigned char is_best = 0;
+
+    for (unsigned char is = 0; is < 16; is++) {
+        const unsigned char h = hamming(is);
+        float acc = 0;
+        for (unsigned char ib = 0, m = 1; ib < 7; ib++, m <<=1) {
+            const float y = soft_bit_history[(ih_bit + ib) % 32];
+            if (h & m) acc -= y;
+            else acc += y;
+        }
+
+        if (acc > best) {
+            best = acc;
+            is_best = is;
+        }
+    }
+    return is_best;
+}
+
 void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t *, void *), void * get_ctx,
                      void (* put_bytes_func)(const unsigned char *, const size_t, void *), void * put_ctx,
                      const float sample_rate, const float f_carrier, const float bandwidth,
@@ -167,6 +208,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     float complex * restrict const fft_input = malloc(sizeof(float complex) * S);
     float complex * restrict const fft_output = malloc(sizeof(float complex) * S);
     float complex * restrict const advances = malloc(sizeof(float complex) * S * L);
+    float * restrict const soft_bit_history = malloc(sizeof(float) * 32);
 
     populate_advances(S, L, advances);
 
@@ -197,8 +239,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     /* this will be (re)initialized and then updated as each data symbol comes in */
     unsigned hash;
 
-    unsigned bits = 0;
-    unsigned short bits_filled = 0;
+    size_t ih_bit = 0, ih_bit_used = 0;
 
     int16_t sample_prev = 0;
 
@@ -299,18 +340,17 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     }
                 }
             } else {
-                const unsigned symbol = degray((lrintf(value + S)) % S);
-
                 /* nudge residual toward error in this bit */
                 residual += 0.5f * (value - lrintf(value));
 
-                bits |= symbol << bits_filled;
-                bits_filled += bits_per_sweep;
+                for (size_t ibit = 0; ibit < bits_per_sweep; ibit++)
+                    soft_bit_history[(ih_bit++) % 32] = soft_bit_decision_from_fft(ibit, S, fft_output);
 
-                if (bits_filled >= 8) {
-                    const unsigned char byte = bits & 0xff;
-                    bits >>= 8;
-                    bits_filled -= 8;
+                if (ih_bit - ih_bit_used >= 14) {
+                    const unsigned char lo_bits = soft_decode_hamming_naive(ih_bit_used + 0, soft_bit_history);
+                    const unsigned char hi_bits = soft_decode_hamming_naive(ih_bit_used + 7, soft_bit_history);
+                    ih_bit_used += 14;
+                    const unsigned char byte = lo_bits | hi_bits << 4U;
 
                     if (1 == state) {
                         bytes_expected = byte + 1;
@@ -350,8 +390,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         upsweeps = 0;
                         downsweeps = 0;
                         residual = 0;
-                        bits = 0;
-                        bits_filled = 0;
+                        ih_bit = 0;
+                        ih_bit_used = 0;
                     }
                 }
             }
@@ -363,6 +403,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     free(fft_input);
     free(history);
     free(bytes);
+    free(soft_bit_history);
 }
 
 static const int16_t * get_samples_from_stdin(const int16_t ** end_p, size_t * stride_p, void * ctx) {
