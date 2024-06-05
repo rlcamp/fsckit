@@ -323,8 +323,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         /* initial value for djb2 checksum */
                         hash = 5381;
                         ibyte = 0;
-                        bits = 0;
-                        bits_filled = 0;
                         state++;
                     }
                     else if (2 == state) {
@@ -335,11 +333,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                         bytes[ibyte++] = byte;
 
-                        if (bytes_expected == ibyte) {
-                            bits = 0;
-                            bits_filled = 0;
+                        if (bytes_expected == ibyte)
                             state++;
-                        }
                     }
                     else if (3 == state) {
                         /* use low bits of djb2 hash as checksum */

@@ -107,13 +107,6 @@ int main(void) {
         /* some upsweeps, circularly shifted to encode length of message in bytes */
         bits = B - 1;
         bits_filled = 8;
-        while (bits_filled) {
-            const unsigned now = bits_filled > bits_per_sweep ? bits_per_sweep : bits_filled;
-            carrier = emit_symbol(carrier, T, advances, bits & ((1U << now) - 1), L);
-
-            bits >>= now;
-            bits_filled -= now;
-        }
 
         /* one shifted upsweep per data symbol */
         for (size_t ibyte = 0; ibyte < B || bits_filled; ) {
@@ -135,20 +128,14 @@ int main(void) {
                 hash = hash * 33U ^ byte;
                 bits |= byte << bits_filled;
                 bits_filled += 8;
+
+                if (ibyte == B) {
+                    /* one byte for checksum (lowest bits of djb2 of data bytes) */
+                    bits |= hash << bits_filled;
+                    bits_filled += 8;
+                }
             }
         }
-
-        /* one upsweep for checksum (lowest bits of djb2 of data symbols) */
-        bits = hash & 0xff;
-        bits_filled = 8;
-        while (bits_filled) {
-            const unsigned now = bits_filled > bits_per_sweep ? bits_per_sweep : bits_filled;
-            carrier = emit_symbol(carrier, T, advances, bits & ((1U << now) - 1), L);
-
-            bits >>= now;
-            bits_filled -= now;
-        }
-
 
         bytes += B;
     }
