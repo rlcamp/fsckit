@@ -305,11 +305,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 /* nudge residual toward error in this bit */
                 residual += 0.5f * (value - lrintf(value));
 
-                if (1 == state) {
-                    bits |= symbol << bits_filled;
-                    bits_filled += bits_per_sweep;
+                bits |= symbol << bits_filled;
+                bits_filled += bits_per_sweep;
 
-                    if (bits_filled == 2 * bits_per_sweep) {
+                if (1 == state) {
+                    if (bits_filled >= 8) {
                         bytes_expected = bits + 1;
                         if (bytes_expected > bytes_expected_max)
                             bytes_expected = 0;
@@ -325,40 +325,46 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     }
                 }
                 else if (2 == state) {
-                    bits |= symbol << bits_filled;
-                    bits_filled += bits_per_sweep;
                     if (bits_filled >= 8) {
                         const unsigned char byte = bits & 0xff;
+                        bits >>= 8;
+                        bits_filled -= 8;
 
                         /* update djb2 hash of data bytes */
                         hash = hash * 33U ^ byte;
 
                         fprintf(stderr, "%s: %u/%u: %u, err %ld ppt\r\n", __func__, ibyte, bytes_expected, byte, lrintf((value - lrintf(value)) * 1e3f));
 
-                        bits >>= 8;
-                        bits_filled -= 8;
                         bytes[ibyte++] = byte;
-                    }
 
-                    if (bytes_expected == ibyte) state++;
+                        if (bytes_expected == ibyte) {
+                            bits = 0;
+                            bits_filled = 0;
+                            state++;
+                        }
+                    }
                 }
                 else if (3 == state) {
-                    /* use low bits of djb2 hash as checksum */
-                    const unsigned hash_low_bits = hash & (S - 1U);
+                    if (bits_filled >= bits_per_sweep) {
+                        const unsigned char byte = bits & 0xff;
 
-                    fprintf(stderr, "%s: parity received: %u, calculated %u, %s\r\n", __func__,
-                            symbol, hash_low_bits, symbol == hash_low_bits ? "pass" : "fail");
+                        /* use low bits of djb2 hash as checksum */
+                        const unsigned hash_low_bits = hash & (S - 1U);
 
-                    if (symbol == hash_low_bits)
-                        put_bytes_func(bytes, bytes_expected, put_ctx);
+                        fprintf(stderr, "%s: parity received: %u, calculated %u, %s\r\n", __func__,
+                                symbol, hash_low_bits, byte == hash_low_bits ? "pass" : "fail");
 
-                    /* reset and wait for next packet */
-                    state = 0;
-                    upsweeps = 0;
-                    downsweeps = 0;
-                    residual = 0;
-                    bits = 0;
-                    bits_filled = 0;
+                        if (byte == hash_low_bits)
+                            put_bytes_func(bytes, bytes_expected, put_ctx);
+
+                        /* reset and wait for next packet */
+                        state = 0;
+                        upsweeps = 0;
+                        downsweeps = 0;
+                        residual = 0;
+                        bits = 0;
+                        bits_filled = 0;
+                    }
                 }
             }
         }
