@@ -49,7 +49,7 @@ static float circular_argmax_of_complex_vector(float * max_magsquared_p, const s
     const float gamma = logf_good_enough_approx(next * one_over_this);
     const float p = 0.5f * (alpha - gamma) / (alpha + gamma);
 
-    return is_max + p;
+    return (is_max + p) - (is_max + p >= 0.5f * S ? S : 0);
 }
 
 static float complex cosisinf(const float x) {
@@ -237,7 +237,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
             /* find index (incl estimating the fractional part) of the loudest fft bin */
             float power = 0;
-            const float value = remainderf(circular_argmax_of_complex_vector(&power, S, fft_output), S);
+            const float value = circular_argmax_of_complex_vector(&power, S, fft_output);
 
             if (!power) continue;
 
@@ -248,7 +248,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 if (upsweeps >= 3) {
                     dechirp(S, L, fft_input, history, ih, advances, 1, -residual);
                     fft_evaluate_forward(fft_output, fft_input, plan);
-                    value_dn = remainderf(circular_argmax_of_complex_vector(&power_dn, S, fft_output), S);
+                    value_dn = circular_argmax_of_complex_vector(&power_dn, S, fft_output);
                 }
 
                 /* if not yet detecting downsweeps, or upsweep was notably louder than possible downsweep... */
@@ -278,7 +278,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                     fprintf(stderr, "%s: downsweep at %u: %ld mB, %.2f, total now %u\r\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power_dn)), value_dn, downsweeps);
 
-                    if (2 == downsweeps && fabsf(remainderf(value_dn - downsweep_prev, S)) < 2.0f) {
+                    if (2 == downsweeps && fabsf(remainderf(value_dn - downsweep_prev, S)) < 2.0f) { /* TODO: factor out remainderf */
                         /* the value detected here allows us to disambiguate between
                          timing error and carrier offset error, and correct both */
 
