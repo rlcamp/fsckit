@@ -59,14 +59,18 @@ static float complex cosisinf(const float x) {
 static void dechirp(const size_t S, const size_t L,
                     float complex fft_input[restrict static S],
                     const float complex history[restrict static S * L], const unsigned ih,
-                    const float complex advances[restrict static S * L], const char down) {
+                    const float complex advances[restrict static S * L], const char down,
+                    const float residual) {
     /* extract critically sampled values from history, and multiply by conjugate of chirp */
     float complex carrier = 1.0f;
+
+    /* TODO: optimize this */
+    const float complex extra = cosisinf(2.0f * (float)M_PI * residual / S);
 
     for (size_t is = 0; is < S; is++) {
         /* TODO: document this indexing math wow */
         fft_input[is] = history[(is * L + ih) % (S * L)] * (down ? carrier : conjf(carrier));
-        carrier = renormalize(carrier * advances[(is * L) % (S * L)]);
+        carrier = renormalize(carrier * advances[(is * L) % (S * L)] * extra);
     }
 }
 
@@ -226,14 +230,14 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             ih_next_frame += S * L;
 
             /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
-            dechirp(S, L, fft_input, history, ih, advances, 0);
+            dechirp(S, L, fft_input, history, ih, advances, 0, residual);
 
             /* do an fft of the dechirped symbol frame */
             fft_evaluate_forward(fft_output, fft_input, plan);
 
             /* find index (incl estimating the fractional part) of the loudest fft bin */
             float power = 0;
-            const float value = remainderf(circular_argmax_of_complex_vector(&power, S, fft_output) - residual, S);
+            const float value = remainderf(circular_argmax_of_complex_vector(&power, S, fft_output), S);
 
             if (!power) continue;
 
@@ -242,9 +246,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 /* if three or more agreeing upsweeps have been detected, also listen for downsweeps */
                 float power_dn = 0, value_dn = FLT_MAX;
                 if (upsweeps >= 3) {
-                    dechirp(S, L, fft_input, history, ih, advances, 1);
+                    dechirp(S, L, fft_input, history, ih, advances, 1, -residual);
                     fft_evaluate_forward(fft_output, fft_input, plan);
-                    value_dn = remainderf(circular_argmax_of_complex_vector(&power_dn, S, fft_output) + residual, S);
+                    value_dn = remainderf(circular_argmax_of_complex_vector(&power_dn, S, fft_output), S);
                 }
 
                 /* if not yet detecting downsweeps, or upsweep was notably louder than possible downsweep... */
