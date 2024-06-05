@@ -12,13 +12,19 @@ Adding the chirped component to MFSK modulation also ensures that all symbols eq
 
 ### MFSK detection
 
-Once thus synced, the receiver can simply de-chirp the received signal by multiplication with a conjugate of the expected unmodulated chirp sequence. The output of this de-chirping is simple MFSK modulation, which can be optimally[1] decoded using block-wise fast Fourier transforms on a critically sampled subband - that is, each symbol consists of S complex samples, over which a length-S complex-to-complex FFT is performed. The loudest of the resulting S bins is the index of the encoded data symbol.
+Once thus synced, the receiver can simply de-chirp the received signal by multiplication with a conjugate of the expected unmodulated chirp sequence. The output of this de-chirping is simple MFSK modulation, which can be optimally[1] decoded using block-wise fast Fourier transforms on a critically sampled subband - that is, each symbol consists of S complex samples, over which a length-S complex-to-complex FFT is performed. The loudest of the resulting S bins is the index of the encoded data symbol, after removing Gray coding such that single-shift errors are always single-bit errors.
 
 Suboptimal demodulation in the high-SNR limit can be performed without an FFT by doing simple FM demodulation of the dechirped waveform within each symbol period.
+
+If the next-downstream logic is a soft-decision forward error correcting decoder, the individual bits can be soft-decided as follows. The dechirping and FFT is performed as before. For each output bit, a power-if-one and a power-if-zero accumulator are initialized. The magnitude squared of the FFT bins of all shifts are inspected. For each bin whose Gray-coded index is set, that bin's magnitude squared is added to the power-if-one accumulator, otherwise it is added to the power-if-zero accumulator. After summing the power in all bins into one or the other of these accumulators, a soft decision between +1.0 and -1.0 can be obtained by dividing the different of these accumulators by their sum. The details of the normalizations of this method have not yet been proven to be optimal.
 
 ### Spreading factor
 
 This modulation falls under the category of "spread spectrum" techniques in that there is a knob that controls spectral redundancy. Since each symbol encodes one of S unique values (and therefore, N = log2(S) bits) and has a duration linearly proportional to S, the redundancy factor is S / log2(S), or equivalently, 2^N / N. Values of N of interest to us range from 4 to 6 (compare to LoRa which uses values of N from 7 to 12 inclusive, in 125-500 kHz of bandwidth around 1 GHz).
+
+### Forward error correction
+
+The current implementation uses a Hamming 7,4 code with no interleaving, and does a dumb simple exhaustive naive maximum-likelihood brute force search for the most likely uncorrupted code word using soft bit decisions as inputs. We can probably do better, but bear in mind this needs to work on a microcontroller with almost no available memory.
 
 ### Todo
 
@@ -32,7 +38,9 @@ This modulation falls under the category of "spread spectrum" techniques in that
 
 - Figure out what is covered by the patent and make sure we are in the clear
 
-- Add some forward error correction. LoRa uses one of several very simple Hamming codes. We can probably do better (and may be forced to in order to not step on the patent) but bear in mind this needs to work on a microcontroller with almost no available memory. Techniques which rely on a Fourier transform as the primitive would be convenient, as the demodulator already uses one.
+- Better forward error correction
+
+- Better routine for identifying two clean downsweeps and the immediately preceding clean upsweep in the preamble. This will require slightly more buffering. An implementation which is suboptimal in memory usage but still achieves optimal output results is probably desirable as it is less likely to step on the LoRa patent, wherein 2.25 downsweeps are used, presumably to enable some memory savings in a particular receiver design.
 
 ### References
 
