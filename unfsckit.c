@@ -197,8 +197,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     /* this will be (re)initialized and then updated as each data symbol comes in */
     unsigned hash;
 
-    float downsweep_prev = 0;
-
     unsigned bits = 0;
     unsigned short bits_filled = 0;
 
@@ -278,7 +276,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                     fprintf(stderr, "%s: downsweep at %u: %ld mB, %.2f, total now %u\r\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power_dn)), value_dn, downsweeps);
 
-                    if (2 == downsweeps && fabsf(remainderf(value_dn - downsweep_prev, S)) < 2.0f) { /* TODO: factor out remainderf */
+                    if (1 == downsweeps) {
                         /* the value detected here allows us to disambiguate between
                          timing error and carrier offset error, and correct both */
 
@@ -290,16 +288,15 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                         fprintf(stderr, "%s: shifted by %d, next frame at %u, residual is %.2f\r\n", __func__,
                                 shift, (unsigned)ih_next_frame, residual);
-
-                        state++;
                     }
+                    else if (2 == downsweeps && fabsf(value_dn) < 2.0f)
+                        state++;
                     else if (2 == downsweeps) {
                         /* just reset and go back to listening for upsweeps */
                         upsweeps = 0;
                         downsweeps = 0;
                         residual = 0;
                     }
-                    else downsweep_prev = value_dn;
                 }
             } else {
                 const unsigned symbol = degray((lrintf(value + S)) % S);
