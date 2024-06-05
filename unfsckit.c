@@ -52,6 +52,10 @@ static float circular_argmax_of_complex_vector(float * max_magsquared_p, const s
     return is_max + p;
 }
 
+static float complex cosisinf(const float x) {
+    return cosf(x) + I * sinf(x);
+}
+
 static void dechirp(const size_t S, const size_t L,
                     float complex fft_input[restrict static S],
                     const float complex history[restrict static S * L], const unsigned ih,
@@ -69,8 +73,8 @@ static void dechirp(const size_t S, const size_t L,
 static void populate_advances(const size_t S, const size_t L, float complex advances[restrict static S * L]) {
     /* construct a lookup table of the S*L roots of unity we need for dechirping the input.
      these will be uniformly spaced about the unit circle starting near -1 on the real axis */
-    float complex advance = -1.0f * cexpf(I * 2.0f * (float)M_PI * 0.5f / S);;
-    const float complex advance_advance = cexpf(I * 2.0f * (float)M_PI / (S * L));
+    float complex advance = -1.0f * cosisinf(2.0f * (float)M_PI * 0.5f / S);;
+    const float complex advance_advance = cosisinf(2.0f * (float)M_PI / (S * L));
     for (size_t isl = 0; isl < S * L; isl++) {
         advances[isl] = advance;
         advance = renormalize(advance * advance_advance);
@@ -87,7 +91,7 @@ static void butterworth_biquads(float num[][3], float den[][3], size_t S, float 
     /* each stage implements a conjugate pair of analog poles */
     for (size_t is = 0; is < P / 2; is++) {
         /* analog butterworth pole. the two poles for this stage are this and its conjugate */
-        const float complex apole = wc * cexpf(I * (float)M_PI * (2.0f * (is + 1) + P - 1.0f) / (2 * P));
+        const float complex apole = wc * cosisinf((float)M_PI * (2.0f * (is + 1) + P - 1.0f) / (2 * P));
 
         /* each analog pole results in one digital pole and one digital zero at -1.0 */
         const float complex dpole = (2.0f - apole) / (2.0f + apole);
@@ -143,7 +147,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
     /* initial value and advance rate of the local oscillator for basebanding */
     float complex carrier = 1.0f;
-    const float complex advance = cexpf(I * 2.0f * (float)M_PI * f_carrier / sample_rate);
+    const float complex advance = cosisinf(2.0f * (float)M_PI * f_carrier / sample_rate);
 
     /* compute filter coefficients for four-pole butterworth biquad cascade */
     float num[4][3], den[4][3];
