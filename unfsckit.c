@@ -308,13 +308,17 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 bits |= symbol << bits_filled;
                 bits_filled += bits_per_sweep;
 
-                if (1 == state) {
-                    if (bits_filled >= 8) {
-                        bytes_expected = bits + 1;
+                if (bits_filled >= 8) {
+                    const unsigned char byte = bits & 0xff;
+                    bits >>= 8;
+                    bits_filled -= 8;
+
+                    if (1 == state) {
+                        bytes_expected = byte + 1;
                         if (bytes_expected > bytes_expected_max)
                             bytes_expected = 0;
-                        const unsigned data_symbols_expected = (bytes_expected * 8 + bits_per_sweep - 1) / bits_per_sweep;
-                        fprintf(stderr, "%s: reading %u bytes in %u symbols\r\n", __func__, bytes_expected, data_symbols_expected);
+
+                        fprintf(stderr, "%s: reading %u bytes\r\n", __func__, bytes_expected);
 
                         /* initial value for djb2 checksum */
                         hash = 5381;
@@ -323,13 +327,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         bits_filled = 0;
                         state++;
                     }
-                }
-                else if (2 == state) {
-                    if (bits_filled >= 8) {
-                        const unsigned char byte = bits & 0xff;
-                        bits >>= 8;
-                        bits_filled -= 8;
-
+                    else if (2 == state) {
                         /* update djb2 hash of data bytes */
                         hash = hash * 33U ^ byte;
 
@@ -343,11 +341,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                             state++;
                         }
                     }
-                }
-                else if (3 == state) {
-                    if (bits_filled >= 8) {
-                        const unsigned char byte = bits & 0xff;
-
+                    else if (3 == state) {
                         /* use low bits of djb2 hash as checksum */
                         const unsigned hash_low_bits = hash & 0xff;
 
