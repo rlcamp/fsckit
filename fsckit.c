@@ -21,14 +21,15 @@ static float complex emit_sweep(float complex carrier, const size_t T,
     return carrier;
 }
 
-static unsigned gray(unsigned x) {
-    return x ^ (x >> 1U);
+static unsigned degray(unsigned x) {
+    for (unsigned m = x; m; m >>= 1, x ^= m);
+    return x;
 }
 
 static float complex emit_symbol(float complex carrier, const size_t T,
                         const float complex advances[restrict static T],
                         const unsigned symbol,  const size_t L) {
-    return emit_sweep(carrier, T, advances, gray(symbol) * L, 0);
+    return emit_sweep(carrier, T, advances, degray(symbol) * L, 0);
 }
 
 static unsigned char hamming(unsigned char x) {

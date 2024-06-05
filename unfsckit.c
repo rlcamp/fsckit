@@ -130,16 +130,15 @@ static float complex cfilter(const float complex x, float complex vprev[2],
     return y;
 }
 
-static unsigned degray(unsigned x) {
-    for (unsigned m = x; m; m >>= 1, x ^= m);
-    return x;
+static unsigned gray(unsigned x) {
+    return x ^ (x >> 1U);
 }
 
 static float soft_bit_decision_from_fft(const size_t ibit, const size_t S, const float complex s[restrict static S]) {
     float power_zero = 0, power_one = 0;
     for (size_t is = 0; is < S; is++)
     /* if this bit is set in the gray code of this symbol... */
-        if (degray(is) & (1U << ibit))
+        if (gray(is) & (1U << ibit))
             power_one += cmagsquaredf(s[is]);
         else
             power_zero += cmagsquaredf(s[is]);
