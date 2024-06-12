@@ -282,8 +282,18 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
             if (!power) continue;
 
-            /* if listening for preamble... */
             if (0 == state) {
+                /* resetting everything */
+                upsweeps = 0;
+                downsweeps = 0;
+                residual = 0;
+                ih_bit = 0;
+                ih_bit_used = 0;
+                state++;
+            }
+
+            /* if listening for preamble... */
+            if (1 == state) {
                 /* if three or more agreeing upsweeps have been detected, also listen for downsweeps */
                 float power_dn = 0, value_dn = FLT_MAX;
                 if (upsweeps >= 3) {
@@ -334,12 +344,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     }
                     else if (2 == downsweeps && fabsf(value_dn) < 2.0f)
                         state++;
-                    else if (2 == downsweeps) {
-                        /* just reset and go back to listening for upsweeps */
-                        upsweeps = 0;
-                        downsweeps = 0;
-                        residual = 0;
-                    }
+                    else if (2 == downsweeps)
+                    /* just reset and go back to listening for upsweeps */
+                        state = 0;
                 }
             } else {
                 /* nudge residual toward error in this bit */
@@ -354,7 +361,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     ih_bit_used += 14;
                     const unsigned char byte = lo_bits | hi_bits << 4U;
 
-                    if (1 == state) {
+                    if (2 == state) {
                         bytes_expected = byte + 1;
                         if (bytes_expected > bytes_expected_max)
                             bytes_expected = 0;
@@ -366,7 +373,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         ibyte = 0;
                         state++;
                     }
-                    else if (2 == state) {
+                    else if (3 == state) {
                         /* update fnv-1a hash of data bytes */
                         hash = (hash ^ byte) * 16777619U;
 
@@ -377,7 +384,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         if (bytes_expected == ibyte)
                             state++;
                     }
-                    else if (3 == state) {
+                    else if (4 == state) {
                         /* use low bits of djb2 hash as checksum */
                         const unsigned hash_low_bits = hash & 0xff;
 
@@ -389,11 +396,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                         /* reset and wait for next packet */
                         state = 0;
-                        upsweeps = 0;
-                        downsweeps = 0;
-                        residual = 0;
-                        ih_bit = 0;
-                        ih_bit_used = 0;
                     }
                 }
             }
