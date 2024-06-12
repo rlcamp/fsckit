@@ -100,8 +100,8 @@ int main(void) {
         unsigned bits = 0;
         unsigned short bits_filled = 0;
 
-        /* djb2 */
-        unsigned hash = 5381;
+        /* fnv-1a initial value */
+        unsigned hash = 2166136261U;
 
         /* emit four unshifted upsweeps, with continuous carrier phase across sweeps */
         carrier = emit_sweep(carrier, T, advances, 0, 0);
@@ -136,7 +136,7 @@ int main(void) {
             }
             if (bits_filled < 14 && ibyte < B) {
                 const unsigned char byte = bytes[ibyte++];
-                hash = hash * 33U ^ byte;
+                hash = (hash ^ byte) * 16777619U;
                 bits |= hamming_one_full_byte(byte) << bits_filled;
                 bits_filled += 14;
             }

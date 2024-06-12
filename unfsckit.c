@@ -362,13 +362,13 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         fprintf(stderr, "%s: reading %u bytes\r\n", __func__, bytes_expected);
 
                         /* initial value for djb2 checksum */
-                        hash = 5381;
+                        hash = 2166136261U;
                         ibyte = 0;
                         state++;
                     }
                     else if (2 == state) {
-                        /* update djb2 hash of data bytes */
-                        hash = hash * 33U ^ byte;
+                        /* update fnv-1a hash of data bytes */
+                        hash = (hash ^ byte) * 16777619U;
 
                         fprintf(stderr, "%s: %u/%u: %u, err %ld ppt\r\n", __func__, ibyte, bytes_expected, byte, lrintf((value - lrintf(value)) * 1e3f));
 
