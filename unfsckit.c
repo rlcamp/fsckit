@@ -363,17 +363,24 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                     if (2 == state) {
                         bytes_expected = byte + 1;
-                        if (bytes_expected > bytes_expected_max)
-                            bytes_expected = 0;
-
-                        fprintf(stderr, "%s: reading %u bytes\r\n", __func__, bytes_expected);
-
-                        /* initial value for djb2 checksum */
-                        hash = 2166136261U;
-                        ibyte = 0;
                         state++;
                     }
                     else if (3 == state) {
+                        const unsigned char len_hash = (2166136261U ^ (bytes_expected - 1)) * 16777619U;
+                        if (bytes_expected > bytes_expected_max ||
+                            byte != len_hash) {
+                            fprintf(stderr, "%s: length failed check or length, resetting\r\n", __func__);
+                            state = 0;
+                        } else {
+                            fprintf(stderr, "%s: reading %u bytes\r\n", __func__, bytes_expected);
+
+                            /* initial value for fnv-1a checksum */
+                            hash = 2166136261U;
+                            ibyte = 0;
+                            state++;
+                        }
+                    }
+                    else if (4 == state) {
                         /* update fnv-1a hash of data bytes */
                         hash = (hash ^ byte) * 16777619U;
 
@@ -384,7 +391,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         if (bytes_expected == ibyte)
                             state++;
                     }
-                    else if (4 == state) {
+                    else if (5 == state) {
                         /* use low bits of djb2 hash as checksum */
                         const unsigned hash_low_bits = hash & 0xff;
 

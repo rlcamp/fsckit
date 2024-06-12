@@ -116,8 +116,10 @@ int main(void) {
         carrier = emit_sweep(carrier, T, advances, 0, 1);
 
         /* some upsweeps, circularly shifted to encode length of message in bytes */
+        const unsigned char len_hash = (2166136261U ^ (unsigned char)(B - 1)) * 16777619U;
         bits = hamming_one_full_byte(B - 1);
-        bits_filled = 14;
+        bits |= hamming_one_full_byte(len_hash) << 14;
+        bits_filled = 28;
 
         /* one shifted upsweep per data symbol */
         for (size_t ibyte = 0, hash_enqueued = 0; bits_filled || !hash_enqueued; ) {
