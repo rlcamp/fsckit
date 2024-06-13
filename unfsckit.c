@@ -271,7 +271,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             ih_next_frame += S * L;
 
             /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
-            dechirp(S, L, H, fft_input, history, ih, advances, 0, residual);
+            dechirp(S, L, H, fft_input, history, ih - S * L, advances, 0, residual);
 
             /* do an fft of the dechirped symbol frame */
             fft_evaluate_forward(fft_output, fft_input, plan);
@@ -297,7 +297,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 /* if three or more agreeing upsweeps have been detected, also listen for downsweeps */
                 float power_dn = 0, value_dn = FLT_MAX;
                 if (upsweeps >= 3) {
-                    dechirp(S, L, H, fft_input, history, ih, advances, 1, -residual);
+                    dechirp(S, L, H, fft_input, history, ih - S * L, advances, 1, -residual);
                     fft_evaluate_forward(fft_output, fft_input, plan);
                     value_dn = circular_argmax_of_complex_vector(&power_dn, S, fft_output);
                 }
