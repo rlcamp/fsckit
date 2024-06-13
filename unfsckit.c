@@ -242,7 +242,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
     int16_t sample_prev = 0;
 
-    size_t iframe = 0, iframe_at_last_reset = 0;
+    unsigned iframe = 0, iframe_at_last_reset = 0;
 
     /* buffer of last four upsweep shifts, for preamble detection */
     float prior_upsweeps[4] = { 0, 0, 0, 0 };
@@ -303,7 +303,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     fabsf(prior_upsweeps[(iframe + 0) % 4] - mean_of_oldest_upsweeps) < 0.5f &&
                     fabsf(prior_upsweeps[(iframe + 1) % 4] - mean_of_oldest_upsweeps) < 0.5f &&
                     fabsf(prior_upsweeps[(iframe + 2) % 4] - mean_of_oldest_upsweeps) < 0.5f) {
-                    fprintf(stderr, "%s: frame %zu: oldest three upsweeps agree on %.3f\r\n", __func__, iframe, mean_of_oldest_upsweeps);
+                    fprintf(stderr, "%s: frame %u: oldest three upsweeps agree %.3f\r\n", __func__, iframe, mean_of_oldest_upsweeps);
 
                     float power_dn = 0;
                     dechirp(S, L, H, fft_input, history, ih - S * L, advances, 1, 0);
@@ -314,8 +314,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                          frequency shift now, as long as |frequency shift| < bw/4 */
                         const float shift_unquantized = L * (mean_of_oldest_upsweeps - value_dn_now) * 0.5f;
                         const int shift = lrintf(shift_unquantized);
-
-                        fprintf(stderr, "%s: frame %zu, downsweep power %.2f dB, shift %d, value %.3f -> %.3f\r\n", __func__, iframe, 10.0f * log10f(power_dn), shift, value_dn_now, value_dn_now + shift / (float)L);
 
                         /* best guess of residual so far, not yet counting first downsweep */
                         residual = (3.0f * (mean_of_oldest_upsweeps - shift / (float)L) +
@@ -333,9 +331,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                         /* if it was a downsweep with the expected shift... */
                         if (power_dn_prior > power_up_prior && fabsf(value_dn_prior - value_dn_now - shift / (float)L) < 0.5f) {
-//                            fprintf(stderr, "%s: frame %zu: previous frame was also a downsweep %.3f\r\n", __func__, iframe, value_dn_prior);
+                            fprintf(stderr, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__, iframe, value_dn_prior, value_dn_now + shift / (float)L);
                             ih_next_frame -= shift;
-//                            fprintf(stderr, "%s: %.3f %.3f %.3f\r\n", __func__, mean_of_oldest_upsweeps - shift / (float)L, value_dn_prior, value_dn_now + shift / (float)L );
 
                             /* final estimate of carrier offset considers last three upsweeps
                              and both downsweeps equally */
@@ -343,9 +340,10 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                         value_dn_now + shift / (float)L +
                                         value_dn_prior) * (1.0f / 5.0f);
 
-                            fprintf(stderr, "%s: data frame starts at %u, residual %.3f, implied carrier offset %ld Hz\r\n", __func__, ih_next_frame, residual, lrintf(residual * bandwidth / S));
+                            fprintf(stderr, "%s: frame %u: data frame starts at time %u, implied carrier offset %ld Hz\r\n", __func__, iframe, ih_next_frame, lrintf(residual * bandwidth / S));
                             state++;
                         }
+                        else fprintf(stderr, "%s: frame %u: possible downsweep\r\n", __func__, iframe);
                     }
                 }
 
@@ -353,6 +351,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             } else {
                 /* nudge residual toward error in this bit */
                 residual += 0.5f * (value - lrintf(value));
+
+                fprintf(stderr, "%s: frame %u: data bits, residual now %.3f\r\n", __func__, iframe, residual);
 
                 for (size_t ibit = 0; ibit < bits_per_sweep; ibit++)
                     soft_bit_history[(ih_bit++) % 32] = soft_bit_decision_from_fft(ibit, S, fft_output);
@@ -386,7 +386,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         /* update fnv-1a hash of data bytes */
                         hash = (hash ^ byte) * 16777619U;
 
-                        fprintf(stderr, "%s: %u/%u: %u, err %ld ppt\r\n", __func__, ibyte, bytes_expected, byte, lrintf((value - lrintf(value)) * 1e3f));
+                        fprintf(stderr, "%s: %u/%u: %u\r\n", __func__, ibyte, bytes_expected, byte);
 
                         bytes[ibyte++] = byte;
 
