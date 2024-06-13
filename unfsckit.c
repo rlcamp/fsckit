@@ -203,7 +203,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     unsigned char * bytes = malloc(bytes_expected_max);
 
     /* length of buffer of critically sampled complex timeseries */
-    const size_t H = S * L;
+    const size_t H = 4 * S * L;
 
     struct planned_forward_fft * plan = plan_forward_fft_of_length(S);
     float complex * restrict const history = malloc(sizeof(float complex) * H);
@@ -232,9 +232,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
      of bins, that should be applied to the fft argmax to get the encoded value */
     float residual = 0;
 
-    /* counters needed by preamble state */
-    unsigned upsweeps = 0, downsweeps = 0;
-
     /* counters needed by data states */
     unsigned bytes_expected = 0, ibyte = 0;
 
@@ -244,6 +241,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     size_t ih_bit = 0, ih_bit_used = 0;
 
     int16_t sample_prev = 0;
+
+    size_t iframe = 0, iframe_at_last_reset = 0;
+
+    /* buffer of last four upsweep shifts, for preamble detection */
+    float prior_upsweeps[4] = { 0, 0, 0, 0 };
 
     size_t stride;
     for (const int16_t * samples, * end; (samples = get_next_sample_func(&end, &stride, get_ctx));)
@@ -284,8 +286,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
             if (0 == state) {
                 /* resetting everything */
-                upsweeps = 0;
-                downsweeps = 0;
+                iframe_at_last_reset = iframe;
                 residual = 0;
                 ih_bit = 0;
                 ih_bit_used = 0;
@@ -294,60 +295,61 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
             /* if listening for preamble... */
             if (1 == state) {
-                /* if three or more agreeing upsweeps have been detected, also listen for downsweeps */
-                float power_dn = 0, value_dn = FLT_MAX;
-                if (upsweeps >= 3) {
-                    dechirp(S, L, H, fft_input, history, ih - S * L, advances, 1, -residual);
+                const float mean_of_oldest_upsweeps = (prior_upsweeps[(iframe + 0) % 4] +
+                                                       prior_upsweeps[(iframe + 1) % 4] +
+                                                       prior_upsweeps[(iframe + 2) % 4]) * (1.0f / 3.0f);
+
+                if (iframe - iframe_at_last_reset >= 5 &&
+                    fabsf(prior_upsweeps[(iframe + 0) % 4] - mean_of_oldest_upsweeps) < 0.5f &&
+                    fabsf(prior_upsweeps[(iframe + 1) % 4] - mean_of_oldest_upsweeps) < 0.5f &&
+                    fabsf(prior_upsweeps[(iframe + 2) % 4] - mean_of_oldest_upsweeps) < 0.5f) {
+                    fprintf(stderr, "%s: frame %zu: oldest three upsweeps agree on %.3f\r\n", __func__, iframe, mean_of_oldest_upsweeps);
+
+                    float power_dn = 0;
+                    dechirp(S, L, H, fft_input, history, ih - S * L, advances, 1, 0);
                     fft_evaluate_forward(fft_output, fft_input, plan);
-                    value_dn = circular_argmax_of_complex_vector(&power_dn, S, fft_output);
-                }
-
-                /* if not yet detecting downsweeps, or upsweep was notably louder than possible downsweep... */
-                if (power >= 2.0f * power_dn) {
-                    /* got an upsweep */
-                    downsweeps = 0;
-
-                    const float shift_unquantized = value * L;
-                    const int shift = lrintf(shift_unquantized);
-                    ih_next_frame -= shift;
-                    residual += (shift_unquantized - shift) / L;
-
-                    if (fabsf(value) >= 0.5f)
-                        upsweeps = 1;
-                    else {
-                        upsweeps++;
-                        /* TODO: do a running average of the residual over all preamble
-                         upsweeps instead of just using the most recent value */
-
-                        if (upsweeps >= 2 && shift) fprintf(stderr, "%s: shifting by %d\r\n", __func__, shift);
-
-                        fprintf(stderr, "%s: upsweep at %u: %ld mB, %.2f, total now %u\r\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power)), value, upsweeps);
-                    }
-                } else {
-                    /* got a downsweep */
-                    downsweeps++;
-
-                    fprintf(stderr, "%s: downsweep at %u: %ld mB, %.2f, total now %u\r\n", __func__, (unsigned)(ih_next_frame - S * L), lrintf(1e3 * log10f(power_dn)), value_dn, downsweeps);
-
-                    if (1 == downsweeps) {
-                        /* the value detected here allows us to disambiguate between
-                         timing error and carrier offset error, and correct both */
-
-                        const float shift_unquantized = 0.5f * value_dn * L;
+                    const float value_dn_now = circular_argmax_of_complex_vector(&power_dn, S, fft_output);
+                    if (power_dn > power) {
+                        /* got a downsweep, should be able to unambiguously resolve time and
+                         frequency shift now, as long as |frequency shift| < bw/4 */
+                        const float shift_unquantized = L * (mean_of_oldest_upsweeps - value_dn_now) * 0.5f;
                         const int shift = lrintf(shift_unquantized);
 
-                        ih_next_frame += shift;
-                        residual += (float)shift / L;
+                        fprintf(stderr, "%s: frame %zu, downsweep power %.2f dB, shift %d, value %.3f -> %.3f\r\n", __func__, iframe, 10.0f * log10f(power_dn), shift, value_dn_now, value_dn_now + shift / (float)L);
 
-                        fprintf(stderr, "%s: shifted by %d, next frame at %u, residual is %.2f\r\n", __func__,
-                                shift, (unsigned)ih_next_frame, residual);
+                        /* best guess of residual so far, not yet counting first downsweep */
+                        residual = (3.0f * (mean_of_oldest_upsweeps - shift / (float)L) +
+                                    value_dn_now + shift / (float)L) * (1.0f / 4.0f);
+
+                        /* consider the prior frame as both an upsweep and downsweep */
+                        float power_up_prior = 0, power_dn_prior = 0;
+                        dechirp(S, L, H, fft_input, history, ih - 2 * S * L - shift, advances, 0, residual);
+                        fft_evaluate_forward(fft_output, fft_input, plan);
+                        circular_argmax_of_complex_vector(&power_up_prior, S, fft_output);
+
+                        dechirp(S, L, H, fft_input, history, ih - 2 * S * L - shift, advances, 1, residual);
+                        fft_evaluate_forward(fft_output, fft_input, plan);
+                        const float value_dn_prior = circular_argmax_of_complex_vector(&power_dn_prior, S, fft_output) - residual;
+
+                        /* if it was a downsweep with the expected shift... */
+                        if (power_dn_prior > power_up_prior && fabsf(value_dn_prior - value_dn_now - shift / (float)L) < 0.5f) {
+//                            fprintf(stderr, "%s: frame %zu: previous frame was also a downsweep %.3f\r\n", __func__, iframe, value_dn_prior);
+                            ih_next_frame -= shift;
+//                            fprintf(stderr, "%s: %.3f %.3f %.3f\r\n", __func__, mean_of_oldest_upsweeps - shift / (float)L, value_dn_prior, value_dn_now + shift / (float)L );
+
+                            /* final estimate of carrier offset considers last three upsweeps
+                             and both downsweeps equally */
+                            residual = (3.0f * (mean_of_oldest_upsweeps - shift / (float)L) +
+                                        value_dn_now + shift / (float)L +
+                                        value_dn_prior) * (1.0f / 5.0f);
+
+                            fprintf(stderr, "%s: data frame starts at %u, residual %.3f, implied carrier offset %ld Hz\r\n", __func__, ih_next_frame, residual, lrintf(residual * bandwidth / S));
+                            state++;
+                        }
                     }
-                    else if (2 == downsweeps && fabsf(value_dn) < 2.0f)
-                        state++;
-                    else if (2 == downsweeps)
-                    /* just reset and go back to listening for upsweeps */
-                        state = 0;
                 }
+
+                prior_upsweeps[iframe % 4] = value;
             } else {
                 /* nudge residual toward error in this bit */
                 residual += 0.5f * (value - lrintf(value));
@@ -406,6 +408,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     }
                 }
             }
+            iframe++;
         }
 
     destroy_planned_forward_fft(plan);
