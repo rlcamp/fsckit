@@ -108,8 +108,6 @@ int main(void) {
         carrier = emit_sweep(carrier, T, advances, 0, 0);
         carrier = emit_sweep(carrier, T, advances, 0, 0);
         carrier = emit_sweep(carrier, T, advances, 0, 0);
-        carrier = emit_sweep(carrier, T, advances, 0, 0);
-        carrier = emit_sweep(carrier, T, advances, 0, 0);
 
         /* two unshifted downsweeps */
         carrier = emit_sweep(carrier, T, advances, 0, 1);
@@ -153,7 +151,7 @@ int main(void) {
         bytes += B;
     }
 
-    for (size_t ioffset = 0; ioffset < T; ioffset++)
+    for (size_t ioffset = 0; ioffset < 4 * T; ioffset++)
         fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
 
     free(advances);
