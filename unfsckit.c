@@ -236,7 +236,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     unsigned bytes_expected = 0, ibyte = 0;
 
     /* this will be (re)initialized and then updated as each data symbol comes in */
-    unsigned hash;
+    unsigned hash = 0;
 
     size_t ih_bit = 0, ih_bit_used = 0;
 
