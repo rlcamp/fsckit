@@ -44,13 +44,13 @@ static unsigned hamming_one_full_byte(unsigned char x) {
 
 int main(void) {
     /* sample rate */
-    float fs = 46875.0f;
+    float fs = 31250;
 
     /* bandwidth of modulation, also sample rate if critically sampled */
-    float bw = 366.211;
+    float bw = 244.141;
 
     /* centre frequency */
-    float fc = 3662.11f;
+    float fc = 1953.12f;
 
     /* this parameter also controls the spreading factor */
     unsigned bits_per_sweep = 5;
