@@ -303,7 +303,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     fabsf(prior_upsweeps[(iframe + 0) % 4] - mean_of_oldest_upsweeps) < 0.5f &&
                     fabsf(prior_upsweeps[(iframe + 1) % 4] - mean_of_oldest_upsweeps) < 0.5f &&
                     fabsf(prior_upsweeps[(iframe + 2) % 4] - mean_of_oldest_upsweeps) < 0.5f) {
-                    fprintf(stderr, "%s: frame %u: oldest three upsweeps agree %.3f\r\n", __func__, iframe, mean_of_oldest_upsweeps);
+                    dprintf(2, "%s: frame %u: oldest three upsweeps agree %.3f\r\n", __func__, iframe, mean_of_oldest_upsweeps);
 
                     float power_dn = 0;
                     dechirp(S, L, H, fft_input, history, ih - S * L, advances, 1, 0);
@@ -331,7 +331,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                         /* if it was a downsweep with the expected shift... */
                         if (power_dn_prior > power_up_prior && fabsf(value_dn_prior - value_dn_now - shift / (float)L) < 0.5f) {
-                            fprintf(stderr, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__, iframe, value_dn_prior, value_dn_now + shift / (float)L);
+                            dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__, iframe, value_dn_prior, value_dn_now + shift / (float)L);
                             ih_next_frame -= shift;
 
                             /* final estimate of carrier offset considers last three upsweeps
@@ -340,10 +340,10 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                         value_dn_now + shift / (float)L +
                                         value_dn_prior) * (1.0f / 5.0f);
 
-                            fprintf(stderr, "%s: frame %u: data frame starts at time %u, implied carrier offset %ld Hz\r\n", __func__, iframe, ih_next_frame, lrintf(residual * bandwidth / S));
+                            dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %ld Hz\r\n", __func__, iframe, ih_next_frame, lrintf(residual * bandwidth / S));
                             state++;
                         }
-                        else fprintf(stderr, "%s: frame %u: possible downsweep\r\n", __func__, iframe);
+                        else dprintf(2, "%s: frame %u: possible downsweep\r\n", __func__, iframe);
                     }
                 }
 
@@ -352,7 +352,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 /* nudge residual toward error in this bit */
                 residual += 0.5f * (value - lrintf(value));
 
-                fprintf(stderr, "%s: frame %u: data bits, residual now %.3f\r\n", __func__, iframe, residual);
+                dprintf(2, "%s: frame %u: data bits, residual now %.3f\r\n", __func__, iframe, residual);
 
                 for (size_t ibit = 0; ibit < bits_per_sweep; ibit++)
                     soft_bit_history[(ih_bit++) % 32] = soft_bit_decision_from_fft(ibit, S, fft_output);
@@ -371,10 +371,10 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         const unsigned char len_hash = (2166136261U ^ (bytes_expected - 1)) * 16777619U;
                         if (bytes_expected > bytes_expected_max ||
                             byte != len_hash) {
-                            fprintf(stderr, "%s: length failed check or length, resetting\r\n", __func__);
+                            dprintf(2, "%s: length failed check or length, resetting\r\n", __func__);
                             state = 0;
                         } else {
-                            fprintf(stderr, "%s: reading %u bytes\r\n", __func__, bytes_expected);
+                            dprintf(2, "%s: reading %u bytes\r\n", __func__, bytes_expected);
 
                             /* initial value for fnv-1a checksum */
                             hash = 2166136261U;
@@ -386,8 +386,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         /* update fnv-1a hash of data bytes */
                         hash = (hash ^ byte) * 16777619U;
 
-                        fprintf(stderr, "%s: %u/%u: %u\r\n", __func__, ibyte, bytes_expected, byte);
-
                         bytes[ibyte++] = byte;
 
                         if (bytes_expected == ibyte)
@@ -397,7 +395,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         /* use low bits of djb2 hash as checksum */
                         const unsigned hash_low_bits = hash & 0xff;
 
-                        fprintf(stderr, "%s: parity received: %u, calculated %u, %s\r\n", __func__,
+                        dprintf(2, "%s: parity received: %u, calculated %u, %s\r\n", __func__,
                                 byte, hash_low_bits, byte == hash_low_bits ? "pass" : "fail");
 
                         if (byte == hash_low_bits)
