@@ -30,15 +30,15 @@ The current implementation uses a Hamming 7,4 code with no interleaving, and doe
 
 - Better false alarm mitigation. This will require both better resistance to incorrectly leaving the detecting-a-preamble state, as well as a way to quickly return to it rather than demodulating a long data packet that does not exist. A checksum on the packet length might be most surefire way to achieve this, at the expense of adding overhead to every packet
 
-- Improve preamble detection at low SNR
-
-- Determine the minimum necessary amount of bandpass filtering in actual practice - the eight-pole Butterworth bandpass filter downstream of the high pass filter may be overkill
+- Pin down the required bandpass filter parameters, there are three knobs here that interact
 
 - Identify and eliminate slow libc calls. The code has a number of remainderf() and lrintf() calls within the hot loop which can be a bottleneck or not, depending on how well they are implemented and optimized for the finite-math-only case within various libc's we care about.
 
 - Figure out what is covered by the patent and make sure we are in the clear
 
-- Better forward error correction
+- Add an interleaving layer between the chirp soft-decoding and the Hamming7,4 decoding. Without interleaving, the latter layer is not actually adding any value vs simply using a larger chirp spreading factor.
+
+- Better forward error correction. We're currently brute-force soft decoding a Hamming 7,4 layer. This could be replaced with a Hadamard 8,4 layer which can be soft-decoded for a lot less compute effort
 
 - Better routine for identifying two clean downsweeps and the immediately preceding clean upsweep in the preamble. This will require slightly more buffering. An implementation which is suboptimal in memory usage but still achieves optimal output results is probably desirable as it is less likely to step on the LoRa patent, wherein 2.25 downsweeps are used, presumably to enable some memory savings in a particular receiver design.
 
