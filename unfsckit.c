@@ -175,6 +175,11 @@ static unsigned char soft_decode_hamming_naive(const size_t ih_bit, const float 
     return is_best;
 }
 
+/* KNOB: half of the number of butterworth filter poles. overall cpu usage is linear with
+ this parameter. too many stages can distort the passband response, too few admits noise */
+#define BIQUAD_STAGES 2
+
+#include <unistd.h>
 void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t *, void *), void * get_ctx,
                      void (* put_bytes_func)(const unsigned char *, const size_t, void *), void * put_ctx,
                      const float sample_rate, const float f_carrier, const float bandwidth,
@@ -182,20 +187,22 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     const size_t S = 1U << bits_per_sweep; /* number of unique measurable symbols */
     /* critically sampled also means there are S complex samples of the band per symbol */
 
-    /* optional intermediate oversampling factor. must be a power of 2, but can be 1. using
-     a value larger than 1 allows finer time alignment of the input to the demodulator, at
-     the expense of more sram usage (but not more computational load). the demodulator
+    /* KNOB: intermediate oversampling factor. must be a power of 2, but can be 1.
+     using a value larger than 1 allows finer time alignment of input to the demodulator,
+     at the expense of more sram usage (but NOT more computational load). the demodulator
      itself always runs at the critical sampling rate s.t the chirps exactly wrap around */
-    const size_t L = 2;
+    const size_t L = 4;
     const float sample_rate_filtered = L * bandwidth;
 
     /* initial value and advance rate of the local oscillator for basebanding */
     float complex carrier = 1.0f;
     const float complex advance = cosisinf(2.0f * (float)M_PI * f_carrier / sample_rate);
 
-    /* compute filter coefficients for four-pole butterworth biquad cascade */
-    float num[4][3], den[4][3];
-    butterworth_biquads(num, den, 4, sample_rate, 0.75f * bandwidth);
+    /* compute filter coefficients for butterworth biquad cascade */
+    /* KNOB: this scaling factor on bandwidth in the filter parameters strongly affects the
+     result. higher values admit more noise, lower values distort the passband */
+    float num[BIQUAD_STAGES][3], den[BIQUAD_STAGES][3];
+    butterworth_biquads(num, den, BIQUAD_STAGES, sample_rate, 0.8f * bandwidth);
 
     const float input_samples_per_filtered_sample = sample_rate / sample_rate_filtered;
 
@@ -215,7 +222,10 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     populate_advances(S, L, advances);
 
     /* biquad cascade filter state */
-    float complex vprev[4][2] = { { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } };
+    float complex vprev[BIQUAD_STAGES][2] = { 0 };
+
+    /* internal state for simple high pass filtering prior to the biquad cascade */
+    int16_t sample_prev = 0;
 
     /* decimator state */
     float input_samples_since_filtered_sample = 0;
@@ -240,8 +250,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
     size_t ih_bit = 0, ih_bit_used = 0;
 
-    int16_t sample_prev = 0;
-
     unsigned iframe = 0, iframe_at_last_reset = 0;
 
     /* buffer of last four upsweep shifts, for preamble detection */
@@ -257,7 +265,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             carrier = renormalize(carrier * advance);
 
             /* apply the biquad filter stages to reject stuff outside the passband */
-            for (size_t is = 0; is < 4; is++)
+            for (size_t is = 0; is < BIQUAD_STAGES; is++)
                 filtered = cfilter(filtered, vprev[is], num[is], den[is]);
 
             /* decimate the filter output to a small integer multiple of nyquist rate */
