@@ -358,7 +358,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 prior_upsweeps[iframe % 4] = value;
             } else {
                 /* nudge residual toward error in this bit */
-                residual += 0.5f * (value - lrintf(value));
+                residual += 0.25f * (value - lrintf(value));
 
                 dprintf(2, "%s: frame %u: data bits, residual now %.3f\r\n", __func__, iframe, residual);
 
