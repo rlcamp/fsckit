@@ -367,57 +367,58 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                 dprintf(2, "%s: frame %u: data bits, residual now %.3f\r\n", __func__, iframe, residual);
 
-                for (size_t ibit = 0; ibit < bits_per_sweep; ibit++)
+                for (size_t ibit = 0; ibit < bits_per_sweep; ibit++) {
                     soft_bit_history[(ih_bit++) % 32] = soft_bit_decision_from_fft(ibit, S, fft_output);
 
-                if (ih_bit - ih_bit_used >= 14) {
-                    const unsigned char lo_bits = soft_decode_hamming_naive(ih_bit_used + 0, soft_bit_history);
-                    const unsigned char hi_bits = soft_decode_hamming_naive(ih_bit_used + 7, soft_bit_history);
-                    ih_bit_used += 14;
-                    const unsigned char byte = lo_bits | hi_bits << 4U;
+                    if (ih_bit - ih_bit_used >= 14) {
+                        const unsigned char lo_bits = soft_decode_hamming_naive(ih_bit_used + 0, soft_bit_history);
+                        const unsigned char hi_bits = soft_decode_hamming_naive(ih_bit_used + 7, soft_bit_history);
+                        ih_bit_used += 14;
+                        const unsigned char byte = lo_bits | hi_bits << 4U;
 
-                    if (2 == state) {
-                        /* the first byte encodes the size of the message, from 1 to 256 */
-                        bytes_expected = byte + 1;
-                        state++;
-                    }
-                    else if (3 == state) {
-                        /* the next byte encodes a checksum of the size */
-                        const unsigned char len_hash = (2166136261U ^ (bytes_expected - 1)) * 16777619U;
-                        if (bytes_expected > bytes_expected_max ||
-                            byte != len_hash) {
-                            dprintf(2, "%s: length failed check or length, resetting\r\n", __func__);
-                            state = 0;
-                        } else {
-                            dprintf(2, "%s: reading %u bytes\r\n", __func__, bytes_expected);
-
-                            /* initial value for fnv-1a checksum */
-                            hash = 2166136261U;
-                            ibyte = 0;
+                        if (2 == state) {
+                            /* the first byte encodes the size of the message, from 1 to 256 */
+                            bytes_expected = byte + 1;
                             state++;
                         }
-                    }
-                    else if (4 == state) {
-                        /* update fnv-1a hash of data bytes */
-                        hash = (hash ^ byte) * 16777619U;
+                        else if (3 == state) {
+                            /* the next byte encodes a checksum of the size */
+                            const unsigned char len_hash = (2166136261U ^ (bytes_expected - 1)) * 16777619U;
+                            if (bytes_expected > bytes_expected_max ||
+                                byte != len_hash) {
+                                dprintf(2, "%s: length failed check or length, resetting\r\n", __func__);
+                                state = 0;
+                            } else {
+                                dprintf(2, "%s: reading %u bytes\r\n", __func__, bytes_expected);
 
-                        bytes[ibyte++] = byte;
+                                /* initial value for fnv-1a checksum */
+                                hash = 2166136261U;
+                                ibyte = 0;
+                                state++;
+                            }
+                        }
+                        else if (4 == state) {
+                            /* update fnv-1a hash of data bytes */
+                            hash = (hash ^ byte) * 16777619U;
 
-                        if (bytes_expected == ibyte)
-                            state++;
-                    }
-                    else if (5 == state) {
-                        /* use low bits of hash as checksum */
-                        const unsigned hash_low_bits = hash & 0xff;
+                            bytes[ibyte++] = byte;
 
-                        dprintf(2, "%s: parity received: %u, calculated %u, %s\r\n", __func__,
-                                byte, hash_low_bits, byte == hash_low_bits ? "pass" : "fail");
+                            if (bytes_expected == ibyte)
+                                state++;
+                        }
+                        else if (5 == state) {
+                            /* use low bits of hash as checksum */
+                            const unsigned hash_low_bits = hash & 0xff;
 
-                        if (byte == hash_low_bits)
-                            put_bytes_func(bytes, bytes_expected, put_ctx);
+                            dprintf(2, "%s: parity received: %u, calculated %u, %s\r\n", __func__,
+                                    byte, hash_low_bits, byte == hash_low_bits ? "pass" : "fail");
 
-                        /* reset and wait for next packet */
-                        state = 0;
+                            if (byte == hash_low_bits)
+                                put_bytes_func(bytes, bytes_expected, put_ctx);
+
+                            /* reset and wait for next packet */
+                            state = 0;
+                        }
                     }
                 }
             }
