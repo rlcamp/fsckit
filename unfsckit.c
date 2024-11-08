@@ -255,6 +255,10 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     /* buffer of last four upsweep shifts, for preamble detection */
     float prior_upsweeps[4] = { 0, 0, 0, 0 };
 
+    /* this loop structure consists of an outer loop over chunks of samples (of initially
+     unknown size), and an inner loop over individual samples within the chunk. this allows
+     the same decoder to be used in hard-realtime microcontroller contexts or soft-realtime
+     unix pipe type contexts, by replacing the callbacks provided to this function */
     size_t stride;
     for (const int16_t * samples, * end; (samples = get_next_sample_func(&end, &stride, get_ctx));)
         for (; samples != end; samples += stride) {
@@ -357,7 +361,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                 prior_upsweeps[iframe % 4] = value;
             } else {
-                /* nudge residual toward error in this bit */
+                /* KNOB: scaling factor by which our running estimate of the residual error
+                 is nudged by each new bit, assuming it was the correct bit */
                 residual += 0.25f * (value - lrintf(value));
 
                 dprintf(2, "%s: frame %u: data bits, residual now %.3f\r\n", __func__, iframe, residual);
@@ -372,10 +377,12 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     const unsigned char byte = lo_bits | hi_bits << 4U;
 
                     if (2 == state) {
+                        /* the first byte encodes the size of the message, from 1 to 256 */
                         bytes_expected = byte + 1;
                         state++;
                     }
                     else if (3 == state) {
+                        /* the next byte encodes a checksum of the size */
                         const unsigned char len_hash = (2166136261U ^ (bytes_expected - 1)) * 16777619U;
                         if (bytes_expected > bytes_expected_max ||
                             byte != len_hash) {
@@ -400,7 +407,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                             state++;
                     }
                     else if (5 == state) {
-                        /* use low bits of djb2 hash as checksum */
+                        /* use low bits of hash as checksum */
                         const unsigned hash_low_bits = hash & 0xff;
 
                         dprintf(2, "%s: parity received: %u, calculated %u, %s\r\n", __func__,
