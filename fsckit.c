@@ -113,38 +113,38 @@ int main(void) {
         carrier = emit_sweep(carrier, T, advances, 0, 1);
         carrier = emit_sweep(carrier, T, advances, 0, 1);
 
-        /* some upsweeps, circularly shifted to encode length of message in bytes */
         const unsigned char len_hash = (2166136261U ^ (unsigned char)(B - 1)) * 16777619U;
-        bits = hamming_one_full_byte(B - 1);
-        bits |= hamming_one_full_byte(len_hash) << 14;
-        bits_filled = 28;
 
-        /* one shifted upsweep per data symbol */
-        for (size_t ibyte = 0, hash_enqueued = 0; bits_filled || !hash_enqueued; ) {
+        for (size_t ibyte = 0; bits_filled || ibyte < B + 3; ) {
             while (bits_filled >= bits_per_sweep) {
                 const unsigned symbol = bits & (S - 1U);
                 carrier = emit_symbol(carrier, T, advances, symbol, L);
                 bits >>= bits_per_sweep;
                 bits_filled -= bits_per_sweep;
             }
-            if (hash_enqueued && bits_filled) {
+
+            if (ibyte == B + 3 && bits_filled) {
                 /* emit an extra symbol to complete the last byte if there are leftover bits */
                 const unsigned symbol = bits & ((1U << bits_filled) - 1);
                 carrier = emit_symbol(carrier, T, advances, symbol, L);
                 bits >>= bits_filled;
                 bits_filled = 0;
             }
-            if (bits_filled < 14 && ibyte < B) {
-                const unsigned char byte = bytes[ibyte++];
-                hash = (hash ^ byte) * 16777619U;
+
+            /* if we can enqueue another full byte... */
+            if (bits_filled < 14 && ibyte < B + 3) {
+                /* the next byte to send is either the message length, its hash, a data
+                 byte, or the hash of all the data bytes */
+                const unsigned char byte = (0 == ibyte ? B - 1 :
+                                            1 == ibyte ? len_hash :
+                                            ibyte < B + 2 ? bytes[ibyte - 2] :
+                                            hash);
                 bits |= hamming_one_full_byte(byte) << bits_filled;
                 bits_filled += 14;
-            }
-            else if (bits_filled < 14 && ibyte == B && !hash_enqueued) {
-                /* one byte for checksum (lowest bits of djb2 of data bytes) */
-                bits |= hamming_one_full_byte(hash) << bits_filled;
-                bits_filled += 14;
-                hash_enqueued = 1;
+
+                if (ibyte >= 2) hash = (hash ^ byte) * 16777619U;
+
+                ibyte++;
             }
         }
 
