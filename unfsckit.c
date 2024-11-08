@@ -153,7 +153,7 @@ static unsigned char hamming(unsigned char x) {
                 (((x >> 0U) ^ (x >> 1U) ^ (x >> 3U)) & 0x1) << 6U);
 }
 
-static unsigned char soft_decode_hamming_naive(const float soft_bit_history[restrict static 7]) {
+static unsigned char soft_decode_hamming_naive(const float soft_bit_history[restrict], const size_t stride) {
     /* this could be replaced with well anything */
     float best = 0;
     unsigned char is_best = 0;
@@ -162,7 +162,7 @@ static unsigned char soft_decode_hamming_naive(const float soft_bit_history[rest
         const unsigned char h = hamming(is);
         float acc = 0;
         for (unsigned char ib = 0, m = 1; ib < 7; ib++, m <<=1) {
-            const float y = soft_bit_history[ib];
+            const float y = soft_bit_history[stride * ib];
             if (h & m) acc -= y;
             else acc += y;
         }
@@ -371,8 +371,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                     if (14 == ih_bit) {
                         ih_bit = 0;
-                        const unsigned char lo_bits = soft_decode_hamming_naive(soft_bit_history + 0);
-                        const unsigned char hi_bits = soft_decode_hamming_naive(soft_bit_history + 7);
+                        const unsigned char lo_bits = soft_decode_hamming_naive(soft_bit_history + 0, 1);
+                        const unsigned char hi_bits = soft_decode_hamming_naive(soft_bit_history + 7, 1);
                         const unsigned char byte = lo_bits | hi_bits << 4U;
 
                         if (2 == state) {
