@@ -217,7 +217,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     float complex * restrict const fft_input = malloc(sizeof(float complex) * S);
     float complex * restrict const fft_output = malloc(sizeof(float complex) * S);
     float complex * restrict const advances = malloc(sizeof(float complex) * S * L);
-    float * restrict const soft_bit_history = malloc(sizeof(float) * 14);
+    float * restrict const soft_bit_history = malloc(sizeof(float) * 7);
 
     populate_advances(S, L, advances);
 
@@ -247,6 +247,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
     /* this will be (re)initialized and then updated as each data symbol comes in */
     unsigned hash = 0;
+
+    unsigned int byte_in_progress = 0;
+    unsigned char byte_in_progress_bits_filled = 0;
 
     size_t ih_bit = 0;
 
@@ -301,6 +304,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 iframe_at_last_reset = iframe;
                 residual = 0;
                 ih_bit = 0;
+                byte_in_progress = 0;
+                byte_in_progress_bits_filled = 0;
                 state++;
             }
 
@@ -369,54 +374,59 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 for (size_t ibit = 0; ibit < bits_per_sweep; ibit++) {
                     soft_bit_history[ih_bit++] = soft_bit_decision_from_fft(ibit, S, fft_output);
 
-                    if (14 == ih_bit) {
+                    if (7 == ih_bit) {
                         ih_bit = 0;
-                        const unsigned char lo_bits = soft_decode_hamming_naive(soft_bit_history + 0, 1);
-                        const unsigned char hi_bits = soft_decode_hamming_naive(soft_bit_history + 7, 1);
-                        const unsigned char byte = lo_bits | hi_bits << 4U;
+                        const unsigned char bits = soft_decode_hamming_naive(soft_bit_history + 0, 1);
+                        byte_in_progress |= bits << byte_in_progress_bits_filled;
+                        byte_in_progress_bits_filled += 4;
+                        if (byte_in_progress_bits_filled >= 8) {
+                            const unsigned char byte = byte_in_progress;
+                            byte_in_progress >>= 8;
+                            byte_in_progress_bits_filled -= 8;
 
-                        if (2 == state) {
-                            /* the first byte encodes the size of the message, from 1 to 256 */
-                            bytes_expected = byte + 1;
-                            state++;
-                        }
-                        else if (3 == state) {
-                            /* the next byte encodes a checksum of the size */
-                            const unsigned char len_hash = (2166136261U ^ (bytes_expected - 1)) * 16777619U;
-                            if (bytes_expected > bytes_expected_max ||
-                                byte != len_hash) {
-                                dprintf(2, "%s: length failed check or length, resetting\r\n", __func__);
-                                state = 0;
-                            } else {
-                                dprintf(2, "%s: reading %u bytes\r\n", __func__, bytes_expected);
-
-                                /* initial value for fnv-1a checksum */
-                                hash = 2166136261U;
-                                ibyte = 0;
+                            if (2 == state) {
+                                /* the first byte encodes the size of the message, from 1 to 256 */
+                                bytes_expected = byte + 1;
                                 state++;
                             }
-                        }
-                        else if (4 == state) {
-                            /* update fnv-1a hash of data bytes */
-                            hash = (hash ^ byte) * 16777619U;
+                            else if (3 == state) {
+                                /* the next byte encodes a checksum of the size */
+                                const unsigned char len_hash = (2166136261U ^ (bytes_expected - 1)) * 16777619U;
+                                if (bytes_expected > bytes_expected_max ||
+                                    byte != len_hash) {
+                                    dprintf(2, "%s: length failed check or length, resetting\r\n", __func__);
+                                    state = 0;
+                                } else {
+                                    dprintf(2, "%s: reading %u bytes\r\n", __func__, bytes_expected);
 
-                            bytes[ibyte++] = byte;
+                                    /* initial value for fnv-1a checksum */
+                                    hash = 2166136261U;
+                                    ibyte = 0;
+                                    state++;
+                                }
+                            }
+                            else if (4 == state) {
+                                /* update fnv-1a hash of data bytes */
+                                hash = (hash ^ byte) * 16777619U;
 
-                            if (bytes_expected == ibyte)
-                                state++;
-                        }
-                        else if (5 == state) {
-                            /* use low bits of hash as checksum */
-                            const unsigned hash_low_bits = hash & 0xff;
+                                bytes[ibyte++] = byte;
 
-                            dprintf(2, "%s: parity received: %u, calculated %u, %s\r\n", __func__,
-                                    byte, hash_low_bits, byte == hash_low_bits ? "pass" : "fail");
+                                if (bytes_expected == ibyte)
+                                    state++;
+                            }
+                            else if (5 == state) {
+                                /* use low bits of hash as checksum */
+                                const unsigned hash_low_bits = hash & 0xff;
 
-                            if (byte == hash_low_bits)
-                                put_bytes_func(bytes, bytes_expected, put_ctx);
+                                dprintf(2, "%s: parity received: %u, calculated %u, %s\r\n", __func__,
+                                        byte, hash_low_bits, byte == hash_low_bits ? "pass" : "fail");
 
-                            /* reset and wait for next packet */
-                            state = 0;
+                                if (byte == hash_low_bits)
+                                    put_bytes_func(bytes, bytes_expected, put_ctx);
+
+                                /* reset and wait for next packet */
+                                state = 0;
+                            }
                         }
                     }
                 }
