@@ -153,7 +153,7 @@ static unsigned char hamming(unsigned char x) {
                 (((x >> 0U) ^ (x >> 1U) ^ (x >> 3U)) & 0x1) << 6U);
 }
 
-static unsigned char soft_decode_hamming_naive(const size_t ih_bit, const float soft_bit_history[restrict static 32]) {
+static unsigned char soft_decode_hamming_naive(const float soft_bit_history[restrict static 7]) {
     /* this could be replaced with well anything */
     float best = 0;
     unsigned char is_best = 0;
@@ -162,7 +162,7 @@ static unsigned char soft_decode_hamming_naive(const size_t ih_bit, const float 
         const unsigned char h = hamming(is);
         float acc = 0;
         for (unsigned char ib = 0, m = 1; ib < 7; ib++, m <<=1) {
-            const float y = soft_bit_history[(ih_bit + ib) % 32];
+            const float y = soft_bit_history[ib];
             if (h & m) acc -= y;
             else acc += y;
         }
@@ -217,7 +217,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     float complex * restrict const fft_input = malloc(sizeof(float complex) * S);
     float complex * restrict const fft_output = malloc(sizeof(float complex) * S);
     float complex * restrict const advances = malloc(sizeof(float complex) * S * L);
-    float * restrict const soft_bit_history = malloc(sizeof(float) * 32);
+    float * restrict const soft_bit_history = malloc(sizeof(float) * 14);
 
     populate_advances(S, L, advances);
 
@@ -248,7 +248,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     /* this will be (re)initialized and then updated as each data symbol comes in */
     unsigned hash = 0;
 
-    size_t ih_bit = 0, ih_bit_used = 0;
+    size_t ih_bit = 0;
 
     unsigned iframe = 0, iframe_at_last_reset = 0;
 
@@ -301,7 +301,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 iframe_at_last_reset = iframe;
                 residual = 0;
                 ih_bit = 0;
-                ih_bit_used = 0;
                 state++;
             }
 
@@ -368,12 +367,12 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 dprintf(2, "%s: frame %u: data bits, residual now %.3f\r\n", __func__, iframe, residual);
 
                 for (size_t ibit = 0; ibit < bits_per_sweep; ibit++) {
-                    soft_bit_history[(ih_bit++) % 32] = soft_bit_decision_from_fft(ibit, S, fft_output);
+                    soft_bit_history[ih_bit++] = soft_bit_decision_from_fft(ibit, S, fft_output);
 
-                    if (ih_bit - ih_bit_used >= 14) {
-                        const unsigned char lo_bits = soft_decode_hamming_naive(ih_bit_used + 0, soft_bit_history);
-                        const unsigned char hi_bits = soft_decode_hamming_naive(ih_bit_used + 7, soft_bit_history);
-                        ih_bit_used += 14;
+                    if (14 == ih_bit) {
+                        ih_bit = 0;
+                        const unsigned char lo_bits = soft_decode_hamming_naive(soft_bit_history + 0);
+                        const unsigned char hi_bits = soft_decode_hamming_naive(soft_bit_history + 7);
                         const unsigned char byte = lo_bits | hi_bits << 4U;
 
                         if (2 == state) {
