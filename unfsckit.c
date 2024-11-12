@@ -306,6 +306,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 ih_bit = 0;
                 byte_in_progress = 0;
                 byte_in_progress_bits_filled = 0;
+                ibyte = 0;
                 state++;
             }
 
@@ -384,12 +385,10 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                             byte_in_progress >>= 8;
                             byte_in_progress_bits_filled -= 8;
 
-                            if (2 == state) {
+                            if (0 == ibyte)
                                 /* the first byte encodes the size of the message, from 1 to 256 */
                                 bytes_expected = byte + 1;
-                                state++;
-                            }
-                            else if (3 == state) {
+                            else if (1 == ibyte) {
                                 /* the next byte encodes a checksum of the size */
                                 const unsigned char len_hash = (2166136261U ^ (bytes_expected - 1)) * 16777619U;
                                 if (bytes_expected > bytes_expected_max ||
@@ -401,20 +400,15 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                                     /* initial value for fnv-1a checksum */
                                     hash = 2166136261U;
-                                    ibyte = 0;
-                                    state++;
                                 }
                             }
-                            else if (4 == state) {
+                            else if (ibyte < bytes_expected + 2) {
                                 /* update fnv-1a hash of data bytes */
                                 hash = (hash ^ byte) * 16777619U;
 
-                                bytes[ibyte++] = byte;
-
-                                if (bytes_expected == ibyte)
-                                    state++;
+                                bytes[ibyte - 2] = byte;
                             }
-                            else if (5 == state) {
+                            else if (ibyte == bytes_expected + 2) {
                                 /* use low bits of hash as checksum */
                                 const unsigned hash_low_bits = hash & 0xff;
 
@@ -427,6 +421,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                 /* reset and wait for next packet */
                                 state = 0;
                             }
+                            ibyte++;
                         }
                     }
                 }
