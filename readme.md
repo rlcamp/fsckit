@@ -36,9 +36,9 @@ The current implementation uses a Hamming 7,4 code with no interleaving, and doe
 
 - Figure out what is covered by the patent and make sure we are in the clear
 
-- Add an interleaving layer between the chirp soft-decoding and the Hamming7,4 decoding. Without interleaving, the latter layer is not actually adding any value vs simply using a larger chirp spreading factor.
+- Add an interleaving layer between the chirp soft-decoding and the Hamming7,4 decoding. Without interleaving, the latter layer is not actually adding any value vs simply using a larger chirp spreading factor. The interleaving factor L should be matched to the expected channel conditions (that is, `L / (S * bandwidth)` should be greater than or equal to the expected channel coherence time)
 
-- Better forward error correction. We're currently brute-force soft decoding a Hamming 7,4 layer. This could be replaced with a Hadamard 8,4 layer which can be soft-decoded for a lot less compute effort
+- Better forward error correction. We're currently brute-force soft decoding a Hamming 7,4 layer in exponential time. This could be replaced with a Hadamard 8,4 layer which can be soft-decoded for a lot less compute effort
 
 - Better routine for identifying two clean downsweeps and the immediately preceding clean upsweep in the preamble. This will require slightly more buffering. An implementation which is suboptimal in memory usage but still achieves optimal output results is probably desirable as it is less likely to step on the LoRa patent, wherein 2.25 downsweeps are used, presumably to enable some memory savings in a particular receiver design.
 
