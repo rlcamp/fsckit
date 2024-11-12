@@ -373,6 +373,12 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                  is nudged by each new bit, assuming it was the correct bit */
                 residual += 0.25f * (value - lrintf(value));
 
+                const int shift = residual * L;
+                if (shift) {
+                    ih_next_frame -= shift;
+                    residual -= (float)shift / L;
+                }
+
                 dprintf(2, "%s: frame %u: data bits, residual now %.3f\r\n", __func__, iframe, residual);
 
                 for (size_t ibit = 0; ibit < bits_per_sweep; ibit++) {
