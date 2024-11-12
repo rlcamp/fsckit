@@ -40,8 +40,6 @@ The current implementation uses a Hamming 7,4 code with no interleaving, and doe
 
 - Better forward error correction. We're currently brute-force soft decoding a Hamming 7,4 layer in exponential time. This could be replaced with a Hadamard 8,4 layer which can be soft-decoded for a lot less compute effort
 
-- Better routine for identifying two clean downsweeps and the immediately preceding clean upsweep in the preamble. This will require slightly more buffering. An implementation which is suboptimal in memory usage but still achieves optimal output results is probably desirable as it is less likely to step on the LoRa patent, wherein 2.25 downsweeps are used, presumably to enable some memory savings in a particular receiver design.
-
 ### References
 
 [1] L. Vangelista, "Frequency shift chirp modulation: The LoRa modulation," IEEE Signal Processing Letters, vol. 24, no. 12, pp. 1818–1821, Dec 2017.
