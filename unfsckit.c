@@ -183,7 +183,7 @@ static unsigned char soft_decode_hamming_naive(const float soft_bit_history[rest
 void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t *, void *), void * get_ctx,
                      void (* put_bytes_func)(const unsigned char *, const size_t, void *), void * put_ctx,
                      const float sample_rate, const float f_carrier, const float bandwidth,
-                     const unsigned bits_per_sweep) {
+                     const unsigned bits_per_sweep, const unsigned interleave) {
     const size_t S = 1U << bits_per_sweep; /* number of unique measurable symbols */
     /* critically sampled also means there are S complex samples of the band per symbol */
 
@@ -191,7 +191,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
      using a value larger than 1 allows finer time alignment of input to the demodulator,
      at the expense of more sram usage (but NOT more computational load). the demodulator
      itself always runs at the critical sampling rate s.t the chirps exactly wrap around */
-    const size_t L = 4;
+    const size_t L = 8;
     const float sample_rate_filtered = L * bandwidth;
 
     /* initial value and advance rate of the local oscillator for basebanding */
@@ -217,7 +217,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     float complex * restrict const fft_input = malloc(sizeof(float complex) * S);
     float complex * restrict const fft_output = malloc(sizeof(float complex) * S);
     float complex * restrict const advances = malloc(sizeof(float complex) * S * L);
-    float * restrict const soft_bit_history = malloc(sizeof(float) * 7);
+    float * restrict const soft_bit_history = malloc(sizeof(float) * 7 * interleave);
 
     populate_advances(S, L, advances);
 
@@ -251,7 +251,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     unsigned int byte_in_progress = 0;
     unsigned char byte_in_progress_bits_filled = 0;
 
-    size_t ih_bit = 0;
+    size_t ih_bit = 0, ih_consumed = 0;
 
     unsigned iframe = 0, iframe_at_last_reset = 0;
 
@@ -297,6 +297,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             float power = 0;
             const float value = circular_argmax_of_complex_vector(&power, S, fft_output);
 
+            write(3, fft_output, sizeof(float complex) * L);
+
             if (!power) continue;
 
             if (0 == state) {
@@ -304,6 +306,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 iframe_at_last_reset = iframe;
                 residual = 0;
                 ih_bit = 0;
+                ih_consumed = 0;
                 byte_in_progress = 0;
                 byte_in_progress_bits_filled = 0;
                 ibyte = 0;
@@ -375,9 +378,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 for (size_t ibit = 0; ibit < bits_per_sweep; ibit++) {
                     soft_bit_history[ih_bit++] = soft_bit_decision_from_fft(ibit, S, fft_output);
 
-                    if (7 == ih_bit) {
-                        ih_bit = 0;
-                        const unsigned char bits = soft_decode_hamming_naive(soft_bit_history + 0, 1);
+                    /* while we can hamming decode some interleaved bits... */
+                    while (ih_bit > ih_consumed + interleave * (7 - 1)) {
+                        const unsigned char bits = soft_decode_hamming_naive(soft_bit_history + ih_consumed, interleave);
+                        ih_consumed++;
+
                         byte_in_progress |= bits << byte_in_progress_bits_filled;
                         byte_in_progress_bits_filled += 4;
                         if (byte_in_progress_bits_filled >= 8) {
@@ -424,6 +429,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                             ibyte++;
                         }
                     }
+
+                    if (ih_consumed == interleave) {
+                        ih_bit = 0;
+                        ih_consumed = 0;
+                    }
                 }
             }
             iframe++;
@@ -455,6 +465,7 @@ static void put_bytes_to_stdout(const unsigned char * bytes, const size_t B, voi
 __attribute((weak))
 int main(void) {
     const unsigned bits_per_sweep = 5;
+    const unsigned interleave = 6;
 
     /* input arguments, all in cycles, samples, or symbols per second */
     const float sample_rate = 31250, bandwidth = 244.141, f_carrier = bandwidth * 8.0f - bandwidth * 0.0f / 32.0f;
@@ -464,7 +475,7 @@ int main(void) {
     int16_t buf[32];
     unfsckit(get_samples_from_stdin, buf,
              put_bytes_to_stdout, NULL,
-             sample_rate, f_carrier, bandwidth, bits_per_sweep);
+             sample_rate, f_carrier, bandwidth, bits_per_sweep, interleave);
 
     fputc('\n', stdout);
 }

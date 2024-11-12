@@ -24,7 +24,7 @@ This modulation falls under the category of "spread spectrum" techniques in that
 
 ### Forward error correction
 
-The current implementation uses a Hamming 7,4 code with no interleaving, and does a dumb simple exhaustive naive maximum-likelihood brute force search for the most likely uncorrupted code word using soft bit decisions as inputs. We can probably do better, but bear in mind this needs to work on a microcontroller with almost no available memory.
+The current implementation uses a Hamming 7,4 code with a controllable amount of interleaving between it and the chirp layer. Without interleaving, the Hamming layer is not actually adding any value vs simply using a larger chirp spreading factor. The interleaving factor L should be matched to the expected channel conditions (that is, `L / (S * bandwidth)` should be greater than or equal to the expected channel coherence time). After deinterleaving, The receiver does a dumb simple exhaustive naive maximum-likelihood brute force search for the most likely uncorrupted code word using soft bit decisions as inputs. We can probably do better, but bear in mind this needs to work on a microcontroller with almost no available memory.
 
 ### Todo
 
@@ -35,8 +35,6 @@ The current implementation uses a Hamming 7,4 code with no interleaving, and doe
 - Identify and eliminate slow libc calls. The code has a number of remainderf() and lrintf() calls within the hot loop which can be a bottleneck or not, depending on how well they are implemented and optimized for the finite-math-only case within various libc's we care about.
 
 - Figure out what is covered by the patent and make sure we are in the clear
-
-- Add an interleaving layer between the chirp soft-decoding and the Hamming7,4 decoding. Without interleaving, the latter layer is not actually adding any value vs simply using a larger chirp spreading factor. The interleaving factor L should be matched to the expected channel conditions (that is, `L / (S * bandwidth)` should be greater than or equal to the expected channel coherence time)
 
 - Better forward error correction. We're currently brute-force soft decoding a Hamming 7,4 layer in exponential time. This could be replaced with a Hadamard 8,4 layer which can be soft-decoded for a lot less compute effort
 
