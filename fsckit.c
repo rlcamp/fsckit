@@ -123,13 +123,10 @@ int main(void) {
                 bits_filled -= bits_per_sweep;
             }
 
-            if (ibyte == B + 3 && bits_filled) {
-                /* emit an extra symbol to complete the last byte if there are leftover bits */
-                const unsigned symbol = bits & ((1U << bits_filled) - 1);
-                carrier = emit_symbol(carrier, T, advances, symbol, L);
-                bits >>= bits_filled;
-                bits_filled = 0;
-            }
+            if (ibyte == B + 3 && bits_filled && bits_filled < bits_per_sweep)
+            /* if no more bits are coming and we have a partially completed
+             sweep, then just enqueue the difference in zero bits */
+                bits_filled = bits_per_sweep;
 
             /* if we can enqueue another full byte... */
             if (bits_filled < 14 && ibyte < B + 3) {
