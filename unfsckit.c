@@ -457,7 +457,7 @@ int main(void) {
     const unsigned bits_per_sweep = 5;
 
     /* input arguments, all in cycles, samples, or symbols per second */
-    const float sample_rate = 31250, bandwidth = 244.121, f_carrier = bandwidth * 8.0f - bandwidth * 0.0f / 32.0f;
+    const float sample_rate = 31250, bandwidth = 244.141, f_carrier = bandwidth * 8.0f - bandwidth * 0.0f / 32.0f;
 
     setvbuf(stdin, NULL, _IONBF, 0);
 
