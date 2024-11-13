@@ -129,21 +129,15 @@ int main(void) {
         unsigned long long bits_transposed = 0;
         size_t bits_transposed_filled = 0;
 
-        const size_t total_hamming_coded_bits = (FEC_N * (B + 3) * 8) / FEC_K;
-        const size_t total_interleaved_bits = ((total_hamming_coded_bits + interleave * FEC_N - 1) / (interleave * FEC_N)) * interleave * FEC_N;
-        const size_t total_sweeps = (total_interleaved_bits + bits_per_sweep - 1) / bits_per_sweep;
-
-        for (size_t isweep = 0, ibyte = 0; isweep < total_sweeps; ) {
+        for (size_t ibyte = 0; ibyte < B + 3 || bits_transposed_filled || bits_filled; ) {
             while (bits_transposed_filled >= bits_per_sweep) {
                 const unsigned symbol = bits_transposed & (S - 1U);
                 carrier = emit_symbol(carrier, T, advances, symbol, L);
                 bits_transposed >>= bits_per_sweep;
                 bits_transposed_filled -= bits_per_sweep;
-                isweep++;
             }
 
-            /* TODO: clean up the criteria for flushing this */
-            if (isweep + 1 == total_sweeps && bits_transposed_filled)
+            if (ibyte == B + 3 && bits_transposed_filled && !bits_filled)
                 /* if no more transposed bits are coming and we have a partially completed
                  sweep, then just enqueue the difference */
                 bits_transposed_filled = bits_per_sweep;
