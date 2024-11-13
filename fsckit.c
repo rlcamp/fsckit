@@ -16,7 +16,7 @@ static float complex emit_sweep(float complex carrier, const size_t T,
                                 const float complex advances[restrict static T],
                                 const size_t shift, const int down) {
     for (size_t it = 0; it < T; it++) {
-        fwrite(&(int16_t) { lrintf(crealf(carrier) * 32767.0f * 0.25f) }, sizeof(int16_t), 1, stdout);
+        fwrite(&(int16_t) { lrintf(crealf(carrier) * 32766.0f) }, sizeof(int16_t), 1, stdout);
         carrier = renormalize(carrier * advances[((down ? T - it : it) + shift) % T]);
     }
     return carrier;
