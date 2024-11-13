@@ -43,6 +43,9 @@ static unsigned hamming_one_full_byte(unsigned char x) {
     return hamming(x & 0xF) | (hamming(x >> 4U) << 7U);
 }
 
+#define FEC_N 7
+#define FEC_K 4
+
 int main(void) {
     /* sample rate */
     float fs = 31250;
@@ -58,7 +61,7 @@ int main(void) {
 
     const unsigned interleave = 6;
 
-    if (interleave * 7 + bits_per_sweep > sizeof(unsigned long long) * CHAR_BIT) {
+    if (interleave * FEC_N + bits_per_sweep > sizeof(unsigned long long) * CHAR_BIT) {
         fprintf(stderr, "error: %s: interleave too long\n", __func__);
         exit(EXIT_FAILURE);
     }
@@ -126,8 +129,8 @@ int main(void) {
         unsigned long long bits_transposed = 0;
         size_t bits_transposed_filled = 0;
 
-        const size_t total_hamming_coded_bits = (7 * (B + 3) * 8) / 4;
-        const size_t total_interleaved_bits = ((total_hamming_coded_bits + interleave * 7 - 1) / (interleave * 7)) * interleave * 7;
+        const size_t total_hamming_coded_bits = (FEC_N * (B + 3) * 8) / FEC_K;
+        const size_t total_interleaved_bits = ((total_hamming_coded_bits + interleave * FEC_N - 1) / (interleave * FEC_N)) * interleave * FEC_N;
         const size_t total_sweeps = (total_interleaved_bits + bits_per_sweep - 1) / bits_per_sweep;
 
         for (size_t isweep = 0, ibyte = 0; isweep < total_sweeps; ) {
@@ -145,11 +148,11 @@ int main(void) {
                  sweep, then just enqueue the difference */
                 bits_transposed_filled = bits_per_sweep;
 
-            while (bits_transposed_filled + interleave * 7 <= sizeof(bits_transposed) * CHAR_BIT &&
-                bits_filled >= interleave * 7) {
+            while (bits_transposed_filled + interleave * FEC_N <= sizeof(bits_transposed) * CHAR_BIT &&
+                bits_filled >= interleave * FEC_N) {
 
                 for (size_t ib = 0, ibit = 0; ib < interleave; ib++)
-                    for (size_t ia = 0; ia < 7; ia++, ibit++) {
+                    for (size_t ia = 0; ia < FEC_N; ia++, ibit++) {
                         const unsigned long long mask = 1ULL << (ib + interleave * ia + bits_transposed_filled);
                         if (bits & (1ULL << ibit))
                             bits_transposed |= mask;
@@ -157,13 +160,13 @@ int main(void) {
                             bits_transposed &= ~mask;
                     }
 
-                bits >>= interleave * 7;
-                bits_filled -= interleave * 7;
-                bits_transposed_filled += interleave * 7;
+                bits >>= interleave * FEC_N;
+                bits_filled -= interleave * FEC_N;
+                bits_transposed_filled += interleave * FEC_N;
             }
 
             /* if we can enqueue another full byte... */
-            while (bits_filled + 14 <= sizeof(bits) * CHAR_BIT && ibyte < B + 3) {
+            while (bits_filled + 2 * FEC_N <= sizeof(bits) * CHAR_BIT && ibyte < B + 3) {
                 /* the next byte to send is either the message length, its hash, a data
                  byte, or the hash of all the data bytes */
                 const unsigned char byte = (0 == ibyte ? B - 1 :
@@ -171,7 +174,7 @@ int main(void) {
                                             ibyte < B + 2 ? bytes[ibyte - 2] :
                                             ibyte == B + 2 ? hash : 0);
                 bits |= (unsigned long long)hamming_one_full_byte(byte) << bits_filled;
-                bits_filled += 14;
+                bits_filled += 2 * FEC_N;
 
                 if (ibyte >= 2) hash = (hash ^ byte) * 16777619U;
 
@@ -180,8 +183,8 @@ int main(void) {
 
             /* if no more bits are coming from upstream and we need to complete a transpose
              group, then just enqueue the difference in zero bits */
-            if (ibyte == B + 3 && bits_filled && bits_transposed_filled < interleave * 7)
-                bits_filled = interleave * 7;
+            if (ibyte == B + 3 && bits_filled && bits_transposed_filled < interleave * FEC_N)
+                bits_filled = interleave * FEC_N;
         }
 
         bytes += B;

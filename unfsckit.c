@@ -175,6 +175,9 @@ static unsigned char soft_decode_hamming_naive(const float soft_bit_history[rest
     return is_best;
 }
 
+#define FEC_N 7
+#define FEC_K 4
+
 /* KNOB: half of the number of butterworth filter poles. overall cpu usage is linear with
  this parameter. too many stages can distort the passband response, too few admits noise */
 #define BIQUAD_STAGES 2
@@ -217,7 +220,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     float complex * restrict const fft_input = malloc(sizeof(float complex) * S);
     float complex * restrict const fft_output = malloc(sizeof(float complex) * S);
     float complex * restrict const advances = malloc(sizeof(float complex) * S * L);
-    float * restrict const soft_bit_history = malloc(sizeof(float) * 7 * interleave);
+    float * restrict const soft_bit_history = malloc(sizeof(float) * FEC_N * interleave);
 
     populate_advances(S, L, advances);
 
@@ -296,8 +299,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             /* find index (incl estimating the fractional part) of the loudest fft bin */
             float power = 0;
             const float value = circular_argmax_of_complex_vector(&power, S, fft_output);
-
-            write(3, fft_output, sizeof(float complex) * L);
 
             if (!power) continue;
 
@@ -385,12 +386,12 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     soft_bit_history[ih_bit++] = soft_bit_decision_from_fft(ibit, S, fft_output);
 
                     /* while we can hamming decode some interleaved bits... */
-                    while (ih_bit > ih_consumed + interleave * (7 - 1)) {
+                    while (ih_bit > ih_consumed + interleave * (FEC_N - 1)) {
                         const unsigned char bits = soft_decode_hamming_naive(soft_bit_history + ih_consumed, interleave);
                         ih_consumed++;
 
                         byte_in_progress |= bits << byte_in_progress_bits_filled;
-                        byte_in_progress_bits_filled += 4;
+                        byte_in_progress_bits_filled += FEC_K;
                         if (byte_in_progress_bits_filled >= 8) {
                             const unsigned char byte = byte_in_progress;
                             byte_in_progress >>= 8;
