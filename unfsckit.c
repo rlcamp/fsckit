@@ -194,7 +194,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
      using a value larger than 1 allows finer time alignment of input to the demodulator,
      at the expense of more sram usage (but NOT more computational load). the demodulator
      itself always runs at the critical sampling rate s.t the chirps exactly wrap around */
-    const size_t L = 8;
+    const size_t L = 2;
     const float sample_rate_filtered = L * bandwidth;
 
     /* initial value and advance rate of the local oscillator for basebanding */
@@ -282,6 +282,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             input_samples_since_filtered_sample++;
             if (input_samples_since_filtered_sample + 0.5f < input_samples_per_filtered_sample) continue;
             input_samples_since_filtered_sample -= input_samples_per_filtered_sample;
+
+            write(3, &filtered, sizeof(float complex));
 
             /* store the basebanded filtered decimated samples in a ring buffer */
             history[(ih++) % H] = filtered;
@@ -470,12 +472,14 @@ static void put_bytes_to_stdout(const unsigned char * bytes, const size_t B, voi
 }
 
 __attribute((weak))
-int main(void) {
+int main(const int argc, const char * const * const argv) {
     const unsigned bits_per_sweep = 5;
     const unsigned interleave = 6;
 
     /* input arguments, all in cycles, samples, or symbols per second */
-    const float sample_rate = 31250, bandwidth = 244.141, f_carrier = bandwidth * 8.0f - bandwidth * 0.0f / 32.0f;
+    const float f_carrier = argc > 1 ? strtof(argv[1], NULL) : 1500.0f;
+    const float bandwidth = argc > 2 ? strtof(argv[2], NULL) : 250.0f;
+    const float sample_rate = argc > 3 ? strtof(argv[3], NULL) : 48000.0f;
 
     setvbuf(stdin, NULL, _IONBF, 0);
 
