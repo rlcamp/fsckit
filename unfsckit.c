@@ -379,7 +379,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     residual -= (float)shift / L;
                 }
 
-                dprintf(2, "%s: frame %u: data bits, residual now %.3f\r\n", __func__, iframe, residual);
+//                dprintf(2, "%s: frame %u: data bits, residual now %.3f\r\n", __func__, iframe, residual);
 
                 for (size_t ibit = 0; ibit < bits_per_sweep; ibit++) {
                     soft_bit_history[ih_bit++] = soft_bit_decision_from_fft(ibit, S, fft_output);

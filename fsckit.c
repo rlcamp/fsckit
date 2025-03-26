@@ -2,7 +2,6 @@
 #include "fsckit.h"
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <math.h>
 #include <complex.h>
 #include <assert.h>
@@ -183,6 +182,8 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
 
     free(advances);
 }
+
+#include <stdio.h>
 
 static size_t fgets_bytes(void * ctx, const size_t Bmax, char buf[restrict static Bmax]) {
     char * ret = fgets(buf, (int)Bmax, ctx);
