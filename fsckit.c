@@ -97,7 +97,7 @@ int main(const int argc, const char * const * const argv) {
     float complex carrier = 1.0f;
 
     /* maybe emit some quiet samples */
-    for (size_t ioffset = 0; ioffset < 999; ioffset++)
+    for (size_t ioffset = 0; ioffset < 4 * T; ioffset++)
         fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
 
     /* loop over lines of text on stdin, emitting one message per line */
@@ -188,6 +188,7 @@ int main(const int argc, const char * const * const argv) {
         bytes += B;
     }
 
+    /* emit some quiet samples to flush the decoder if being piped directly into it */
     for (size_t ioffset = 0; ioffset < 4 * T; ioffset++)
         fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
 
