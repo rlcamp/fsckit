@@ -28,8 +28,8 @@ static unsigned degray(unsigned x) {
 }
 
 static float complex emit_symbol(float complex carrier, const size_t T,
-                        const float complex advances[restrict static T],
-                        const unsigned symbol,  const size_t L) {
+                                 const float complex advances[restrict static T],
+                                 const unsigned symbol,  const size_t L) {
     return emit_sweep(carrier, T, advances, degray(symbol) * L, 0);
 }
 
@@ -140,12 +140,12 @@ int main(const int argc, const char * const * const argv) {
             }
 
             if (ibyte == B + 3 && bits_transposed_filled && !bits_filled)
-                /* if no more transposed bits are coming and we have a partially completed
-                 sweep, then just enqueue the difference */
+            /* if no more transposed bits are coming and we have a partially completed
+             sweep, then just enqueue the difference */
                 bits_transposed_filled = bits_per_sweep;
 
             while (bits_transposed_filled + interleave * FEC_N <= sizeof(bits_transposed) * CHAR_BIT &&
-                bits_filled >= interleave * FEC_N) {
+                   bits_filled >= interleave * FEC_N) {
 
                 for (size_t ib = 0, ibit = 0; ib < interleave; ib++)
                     for (size_t ia = 0; ia < FEC_N; ia++, ibit++) {

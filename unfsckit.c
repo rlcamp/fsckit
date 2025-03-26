@@ -184,9 +184,9 @@ static unsigned char soft_decode_hamming_naive(const float soft_bit_history[rest
 
 #include <unistd.h>
 void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t *, void *), void * get_ctx,
-                     void (* put_bytes_func)(const unsigned char *, const size_t, void *), void * put_ctx,
-                     const float sample_rate, const float f_carrier, const float bandwidth,
-                     const unsigned bits_per_sweep, const unsigned interleave) {
+              void (* put_bytes_func)(const unsigned char *, const size_t, void *), void * put_ctx,
+              const float sample_rate, const float f_carrier, const float bandwidth,
+              const unsigned bits_per_sweep, const unsigned interleave) {
     const size_t S = 1U << bits_per_sweep; /* number of unique measurable symbols */
     /* critically sampled also means there are S complex samples of the band per symbol */
 
@@ -400,7 +400,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                             byte_in_progress_bits_filled -= 8;
 
                             if (0 == ibyte)
-                                /* the first byte encodes the size of the message, from 1 to 256 */
+                            /* the first byte encodes the size of the message, from 1 to 256 */
                                 bytes_expected = byte + 1;
                             else if (1 == ibyte) {
                                 /* the next byte encodes a checksum of the size */
