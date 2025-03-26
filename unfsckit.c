@@ -12,13 +12,6 @@ static float cmagsquaredf(const float complex x) {
     return crealf(x) * crealf(x) + cimagf(x) * cimagf(x);
 }
 
-static float logf_good_enough_approx(float x) {
-    /* thanks to stef o'rear for pointing out that ieee floats are already a first-order
-     approximation of logf when interpreted as an integer, you just have to scale and shift it */
-    const union { float f; uint32_t i; } y = { .f = x };
-    return y.i * (0.6931472f / 8388608.0f) - 127.0f * 0.6931472f;
-}
-
 static float complex renormalize(const float complex x) {
     /* assuming x is already near unity, renormalize to unity w/o div or sqrt */
     return x * (3.0f - cmagsquaredf(x)) * 0.5f;
@@ -45,8 +38,8 @@ static float circular_argmax_of_complex_vector(float * max_magsquared_p, const s
     const float next = cmagsquaredf(s[(is_max + 1) % S]);
 
     /* actual logf is expensive, use a fast approx that is good enough for the use case */
-    const float alpha = logf_good_enough_approx(prev * one_over_this);
-    const float gamma = logf_good_enough_approx(next * one_over_this);
+    const float alpha = logf(prev * one_over_this);
+    const float gamma = logf(next * one_over_this);
     const float p = 0.5f * (alpha - gamma) / (alpha + gamma);
 
     return (is_max + p) - (is_max + p >= 0.5f * S ? S : 0);
