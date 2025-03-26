@@ -15,9 +15,9 @@ static float complex renormalize(const float complex x) {
 
 static float complex emit_sweep(float complex carrier, const size_t T,
                                 const float complex advances[restrict static T],
-                                const size_t shift, const int down) {
+                                const size_t shift, const int down, const float amplitude) {
     for (size_t it = 0; it < T; it++) {
-        fwrite(&(int16_t) { lrintf(cimagf(carrier) * 32766.0f) }, sizeof(int16_t), 1, stdout);
+        fwrite(&(int16_t) { lrintf(cimagf(carrier) * amplitude) }, sizeof(int16_t), 1, stdout);
         carrier = renormalize(carrier * advances[((down ? T - it : it) + shift) % T]);
     }
     return carrier;
@@ -30,8 +30,8 @@ static unsigned degray(unsigned x) {
 
 static float complex emit_symbol(float complex carrier, const size_t T,
                                  const float complex advances[restrict static T],
-                                 const unsigned symbol,  const size_t L) {
-    return emit_sweep(carrier, T, advances, degray(symbol) * L, 0);
+                                 const unsigned symbol,  const size_t L, const float amplitude) {
+    return emit_sweep(carrier, T, advances, degray(symbol) * L, 0, amplitude);
 }
 
 static unsigned char hamming(unsigned char x) {
@@ -59,6 +59,8 @@ int main(const int argc, const char * const * const argv) {
 
     /* sample rate */
     const float fs  = argc > 3 ? strtof(argv[3], NULL) : 48000.0f;
+
+    const float amplitude = argc > 4 ? strtof(argv[4], NULL) : 32766.0f;
 
     /* this parameter also controls the spreading factor */
     unsigned bits_per_sweep = 5;
@@ -116,14 +118,14 @@ int main(const int argc, const char * const * const argv) {
         unsigned hash = 2166136261U;
 
         /* emit four unshifted upsweeps, with continuous carrier phase across sweeps */
-        carrier = emit_sweep(carrier, T, advances, 0, 0);
-        carrier = emit_sweep(carrier, T, advances, 0, 0);
-        carrier = emit_sweep(carrier, T, advances, 0, 0);
-        carrier = emit_sweep(carrier, T, advances, 0, 0);
+        carrier = emit_sweep(carrier, T, advances, 0, 0, amplitude);
+        carrier = emit_sweep(carrier, T, advances, 0, 0, amplitude);
+        carrier = emit_sweep(carrier, T, advances, 0, 0, amplitude);
+        carrier = emit_sweep(carrier, T, advances, 0, 0, amplitude);
 
         /* two unshifted downsweeps */
-        carrier = emit_sweep(carrier, T, advances, 0, 1);
-        carrier = emit_sweep(carrier, T, advances, 0, 1);
+        carrier = emit_sweep(carrier, T, advances, 0, 1, amplitude);
+        carrier = emit_sweep(carrier, T, advances, 0, 1, amplitude);
 
         const unsigned char len_hash = (2166136261U ^ (unsigned char)(B - 1)) * 16777619U;
 
@@ -136,7 +138,7 @@ int main(const int argc, const char * const * const argv) {
         for (size_t ibyte = 0; ibyte < B + 3 || bits_transposed_filled || bits_filled; ) {
             while (bits_transposed_filled >= bits_per_sweep) {
                 const unsigned symbol = bits_transposed & (S - 1U);
-                carrier = emit_symbol(carrier, T, advances, symbol, L);
+                carrier = emit_symbol(carrier, T, advances, symbol, L, amplitude);
                 bits_transposed >>= bits_per_sweep;
                 bits_transposed_filled -= bits_per_sweep;
             }
@@ -190,7 +192,7 @@ int main(const int argc, const char * const * const argv) {
 
     const float initial_imag = cimagf(carrier);
     while (cimagf(carrier) * initial_imag > 0.0f) {
-        fwrite(&(int16_t) { lrintf(cimagf(carrier) * 32766.0f) }, sizeof(int16_t), 1, stdout);
+        fwrite(&(int16_t) { lrintf(cimagf(carrier) * amplitude) }, sizeof(int16_t), 1, stdout);
         carrier = renormalize(carrier * advances[0]);
     }
 
