@@ -57,6 +57,11 @@ static unsigned hamming_one_full_byte(unsigned char x) {
 #define FEC_N 7
 #define FEC_K 4
 
+static size_t fgets_bytes(void * ctx, const size_t Bmax, char buf[restrict static Bmax]) {
+    char * ret = fgets(buf, (int)Bmax, ctx);
+    return ret ? strlen(ret) : 0;
+}
+
 int main(const int argc, const char * const * const argv) {
     /* input arguments, all in cycles, samples, or symbols per second */
 
@@ -80,6 +85,9 @@ int main(const int argc, const char * const * const argv) {
         fprintf(stderr, "error: %s: interleave too long\n", __func__);
         exit(EXIT_FAILURE);
     }
+
+    size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restrict static Bmax]) = fgets_bytes;
+    void * get_bytes_ctx = stdin;
 
     void (* emit_sample_func)(void *, const int16_t) = fwrite_sample;
     void * emit_sample_ctx = stdout;
@@ -114,17 +122,12 @@ int main(const int argc, const char * const * const argv) {
     for (size_t ioffset = 0; ioffset < 4 * T; ioffset++)
         emit_sample_func(emit_sample_ctx, 0);
 
-    /* loop over lines of text on stdin, emitting one message per line */
-    char * bytes = NULL;
-    char * line = NULL;
-    size_t linecap = 0;
+    /* loop over lines of text on stdin, or blocks of 256 bytes */
+    char bytes[257];
+
     while (1) {
-        if (!bytes || !bytes[0]) {
-            if (getline(&line, &linecap, stdin) <= 0) break;
-            bytes = line;
-        }
-        const size_t line_remaining = strlen(bytes);
-        const size_t B = line_remaining <= 256 ? line_remaining : 256;
+        const size_t B = get_bytes_func(get_bytes_ctx, sizeof(bytes) - 1, bytes);
+        if (!B) break;
 
         /* fnv-1a initial value */
         unsigned hash = 2166136261U;
@@ -198,8 +201,6 @@ int main(const int argc, const char * const * const argv) {
             if (ibyte == B + 3 && bits_filled && bits_transposed_filled < interleave * FEC_N)
                 bits_filled = interleave * FEC_N;
         }
-
-        bytes += B;
     }
 
     const float initial_imag = cimagf(carrier);
