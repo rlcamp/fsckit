@@ -2,6 +2,7 @@
 /* minimum viable usage: printf 'hello\n' | ./fsckit | ./unfsckit */
 #include "unfsckit.h"
 #include "fft_anywhere.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -50,8 +51,8 @@ static float complex cosisinf(const float x) {
     return cosf(x) + I * sinf(x);
 }
 
-static void dechirp(const size_t S, const size_t L,
-                    const size_t H, float complex fft_input[restrict static S],
+static void dechirp(const size_t S, const size_t L, const size_t H,
+                    float complex fft_input[restrict static S],
                     const float complex history[restrict static H], const unsigned ih,
                     const float complex advances[restrict static S * L], const char down,
                     const float residual) {
@@ -68,7 +69,8 @@ static void dechirp(const size_t S, const size_t L,
     }
 }
 
-static void populate_advances(const size_t S, const size_t L, float complex advances[restrict static S * L]) {
+static void populate_advances(const size_t S, const size_t L,
+                              float complex advances[restrict static S * L]) {
     /* construct a lookup table of the S*L roots of unity we need for dechirping the input.
      these will be uniformly spaced about the unit circle starting near -1 on the real axis */
     float complex advance = -1.0f * cosisinf(2.0f * (float)M_PI * 0.5f / S);;
@@ -79,7 +81,9 @@ static void populate_advances(const size_t S, const size_t L, float complex adva
     }
 }
 
-static void butterworth_biquads(float num[][3], float den[][3], size_t S, float fs, float fc) {
+static void butterworth_biquads(const size_t S, float num[restrict static S][3],
+                                float den[restrict static S][3],
+                                const float fs, const float fc) {
     /* number of poles must be even */
     const size_t P = 2 * S;
 
@@ -128,7 +132,8 @@ static unsigned gray(unsigned x) {
     return x ^ (x >> 1U);
 }
 
-static float soft_bit_decision_from_fft(const size_t ibit, const size_t S, const float complex s[restrict static S]) {
+static float soft_bit_decision_from_fft(const size_t ibit, const size_t S,
+                                        const float complex s[restrict static S]) {
     float power_zero = 0, power_one = 0;
     for (size_t is = 0; is < S; is++)
     /* if this bit is set in the gray code of this symbol... */
@@ -198,7 +203,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     /* KNOB: this scaling factor on bandwidth in the filter parameters strongly affects the
      result. higher values admit more noise, lower values distort the passband */
     float biquad_num[BIQUAD_STAGES][3], biquad_den[BIQUAD_STAGES][3];
-    butterworth_biquads(biquad_num, biquad_den, BIQUAD_STAGES, sample_rate, 0.8f * bandwidth);
+    butterworth_biquads(BIQUAD_STAGES, biquad_num, biquad_den, sample_rate, 0.8f * bandwidth);
 
     const float input_samples_per_filtered_sample = sample_rate / sample_rate_filtered;
 
@@ -447,6 +452,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     free(bytes);
     free(soft_bit_history);
 }
+
+/* everything that follows is an optional cmdline interface for standalone usage */
 
 static const int16_t * get_samples_from_stdin(const int16_t ** end_p, size_t * stride_p, void * ctx) {
     int16_t * buf = ctx;
