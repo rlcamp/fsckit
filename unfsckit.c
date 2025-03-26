@@ -176,7 +176,6 @@ static unsigned char soft_decode_hamming_naive(const float soft_bit_history[rest
  this parameter. too many stages can distort the passband response, too few admits noise */
 #define BIQUAD_STAGES 2
 
-#include <unistd.h>
 void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t *, void *), void * get_ctx,
               void (* put_bytes_func)(const unsigned char *, const size_t, void *), void * put_ctx,
               const float sample_rate, const float f_carrier, const float bandwidth,
@@ -276,8 +275,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             input_samples_since_filtered_sample++;
             if (input_samples_since_filtered_sample + 0.5f < input_samples_per_filtered_sample) continue;
             input_samples_since_filtered_sample -= input_samples_per_filtered_sample;
-
-            write(3, &filtered, sizeof(float complex));
 
             /* store the basebanded filtered decimated samples in a ring buffer */
             basebanded_ring[(ih++) % H] = filtered;
