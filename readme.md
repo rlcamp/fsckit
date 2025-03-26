@@ -1,22 +1,20 @@
 # fsckit/unfsckit
 
-This is a work-in-progress, proof-of-concept digital modulation loosely inspired by LoRa[1], which has some properties desirable for acoustic comms over unreliable channels. Care will need to be taken to ensure that we do not violate the LoRa patent if using anything similar to this for anything important. There is lots of relevant stuff in the academic literature describing how to time-align LoRa. I have not read the LoRa patent itself.
+This is a proof-of-concept digital modulation loosely inspired by LoRa[1], which has some properties desirable for acoustic communications over unreliable channels.
 
 ## Concepts
 
 ### Frequency-shifted chirp keying
 
-The basic concept is identical to multiple-frequency-shift-keying (MFSK) with an additional linearly-increasing-with-wraparound component to the transmitted waveform. Each message starts with a preamble consisting of 2 or more upsweeps followed by 2 downsweeps, allowing the receiver to detect the beginning of a message and simulateously disambiguate timing and carrier frequency offset[2].
+The basic concept is identical to multiple-frequency-shift-keying (MFSK) with an additional linearly-increasing-with-wraparound component to the transmitted waveform. Each message starts with a preamble consisting of 3 or more upsweeps followed by 2 downsweeps, allowing the receiver to detect the beginning of a message and simulateously disambiguate timing and carrier frequency offset[2].
 
 Adding the chirped component to MFSK modulation also ensures that all symbols equally sweep the entire passband, providing resilience against non-flat responses in the transmitter, propagation channel, and/or receiver.
 
 ### MFSK detection
 
-Once thus synced, the receiver can simply de-chirp the received signal by multiplication with a conjugate of the expected unmodulated chirp sequence. The output of this de-chirping is simple MFSK modulation, which can be optimally[1] decoded using block-wise fast Fourier transforms on a critically sampled subband - that is, each symbol consists of S complex samples, over which a length-S complex-to-complex FFT is performed. The loudest of the resulting S bins is the index of the encoded data symbol, after removing Gray coding such that single-shift errors are always single-bit errors.
+Once synced, the receiver can simply de-chirp the received signal by multiplying by the conjugate of the expected unmodulated chirp. The output of this de-chirping is simple MFSK modulation, which can be optimally[1] decoded using block-wise fast Fourier transforms on a critically sampled subband (that is, each symbol consists of S complex samples, over which a length-S complex-to-complex FFT is performed). The loudest of the resulting S bins is the index of the encoded data symbol. Gray coding is used to ensure that single-shift errors result in only single-bit errors.
 
-Suboptimal demodulation in the high-SNR limit can be performed without an FFT by doing simple FM demodulation of the dechirped waveform within each symbol period.
-
-If the next-downstream logic is a soft-decision forward error correcting decoder, the individual bits can be soft-decided as follows. The dechirping and FFT is performed as before. For each output bit, a power-if-one and a power-if-zero accumulator are initialized. The magnitude squared of the FFT bins of all shifts are inspected. For each bin whose Gray-coded index is set, that bin's magnitude squared is added to the power-if-one accumulator, otherwise it is added to the power-if-zero accumulator. After summing the power in all bins into one or the other of these accumulators, a soft decision between +1.0 and -1.0 can be obtained by dividing the difference of these accumulators by their sum. The details of the normalizations of this method have not yet been proven to be optimal.
+If the next-downstream logic is a soft-decision forward error correcting decoder, the individual bits can be soft-decided as follows. The dechirping and FFT are performed as before. For each output bit, a power-if-one and a power-if-zero accumulator are initialized. The magnitude squared of the FFT bins of all shifts are inspected. For each bin whose Gray-coded index is set, that bin's magnitude squared is added to the power-if-one accumulator, otherwise it is added to the power-if-zero accumulator. After summing the power in all bins into one or the other of these accumulators, a soft decision between +1.0 and -1.0 can be obtained by dividing the difference of these accumulators by their sum. The details of the normalizations of this method have not yet been proven to be optimal.
 
 ### Spreading factor
 
@@ -28,13 +26,9 @@ The current implementation uses a Hamming 7,4 code with a controllable amount of
 
 ### Todo
 
-- Better false alarm mitigation. This will require both better resistance to incorrectly leaving the detecting-a-preamble state, as well as a way to quickly return to it rather than demodulating a long data packet that does not exist. A checksum on the packet length might be most surefire way to achieve this, at the expense of adding overhead to every packet
-
 - Pin down the required bandpass filter parameters, there are three knobs here that interact
 
 - Identify and eliminate slow libc calls. The code has a number of remainderf() and lrintf() calls within the hot loop which can be a bottleneck or not, depending on how well they are implemented and optimized for the finite-math-only case within various libc's we care about.
-
-- Figure out what is covered by the patent and make sure we are in the clear
 
 - Better forward error correction. We're currently brute-force soft decoding a Hamming 7,4 layer in exponential time. This could be replaced with a Hadamard 8,4 layer which can be soft-decoded for a lot less compute effort
 
