@@ -1,3 +1,4 @@
+/* campbell, 2024-2025, isc license */
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>

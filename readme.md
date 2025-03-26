@@ -38,6 +38,10 @@ The current implementation uses a Hamming 7,4 code with a controllable amount of
 
 - Better forward error correction. We're currently brute-force soft decoding a Hamming 7,4 layer in exponential time. This could be replaced with a Hadamard 8,4 layer which can be soft-decoded for a lot less compute effort
 
+### License
+
+ISC license.
+
 ### References
 
 [1] L. Vangelista, "Frequency shift chirp modulation: The LoRa modulation," IEEE Signal Processing Letters, vol. 24, no. 12, pp. 1818–1821, Dec 2017.

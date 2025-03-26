@@ -1,3 +1,4 @@
+/* campbell, 2024-2025. isc license */
 /* minimum viable usage: printf 'hello\n' | ./fsckit | ./unfsckit */
 #include "unfsckit.h"
 #include "fft_anywhere.h"
