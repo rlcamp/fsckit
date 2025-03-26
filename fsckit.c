@@ -1,4 +1,6 @@
 /* campbell, 2024-2025, isc license */
+#include "fsckit.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -11,10 +13,6 @@ static float complex renormalize(const float complex x) {
     /* assuming x is already near unity, renormalize to unity w/o div or sqrt */
     const float magsquared = crealf(x) * crealf(x) + cimagf(x) * cimagf(x);
     return x * (3.0f - magsquared) * 0.5f;
-}
-
-static void fwrite_sample(void * ctx, const int16_t sample) {
-    fwrite(&sample, sizeof(int16_t), 1, ctx);
 }
 
 static float complex emit_sweep(void (* emit_sample_func)(void *, const int16_t),
@@ -57,41 +55,11 @@ static unsigned hamming_one_full_byte(unsigned char x) {
 #define FEC_N 7
 #define FEC_K 4
 
-static size_t fgets_bytes(void * ctx, const size_t Bmax, char buf[restrict static Bmax]) {
-    char * ret = fgets(buf, (int)Bmax, ctx);
-    return ret ? strlen(ret) : 0;
-}
-
-int main(const int argc, const char * const * const argv) {
-    /* input arguments, all in cycles, samples, or symbols per second */
-
-    /* centre frequency */
-    const float fc = argc > 1 ? strtof(argv[1], NULL) : 1500.0f;
-
-    /* bandwidth of modulation, also sample rate if critically sampled */
-    const float bw = argc > 2 ? strtof(argv[2], NULL) : 250.0f;
-
-    /* sample rate */
-    const float fs  = argc > 3 ? strtof(argv[3], NULL) : 48000.0f;
-
-    const float amplitude = argc > 4 ? strtof(argv[4], NULL) : 32766.0f;
-
-    /* this parameter also controls the spreading factor */
-    unsigned bits_per_sweep = 5;
-
-    const unsigned interleave = 6;
-
-    if (interleave * FEC_N + bits_per_sweep > sizeof(unsigned long long) * CHAR_BIT) {
-        fprintf(stderr, "error: %s: interleave too long\n", __func__);
-        exit(EXIT_FAILURE);
-    }
-
-    size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restrict static Bmax]) = fgets_bytes;
-    void * get_bytes_ctx = stdin;
-
-    void (* emit_sample_func)(void *, const int16_t) = fwrite_sample;
-    void * emit_sample_ctx = stdout;
-
+void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restrict static Bmax]),
+            void * get_bytes_ctx,
+            void (* emit_sample_func)(void *, const int16_t), void * emit_sample_ctx,
+            const float amplitude, const float fs, const float fc, const float bw,
+            const unsigned bits_per_sweep, const unsigned interleave) {
     /* number of unique measurable symbols is 2^bits_per_sweep */
     const size_t S = 1U << bits_per_sweep;
 
@@ -214,4 +182,41 @@ int main(const int argc, const char * const * const argv) {
         emit_sample_func(emit_sample_ctx, 0);
 
     free(advances);
+}
+
+static size_t fgets_bytes(void * ctx, const size_t Bmax, char buf[restrict static Bmax]) {
+    char * ret = fgets(buf, (int)Bmax, ctx);
+    return ret ? strlen(ret) : 0;
+}
+
+static void fwrite_sample(void * ctx, const int16_t sample) {
+    fwrite(&sample, sizeof(int16_t), 1, ctx);
+}
+
+__attribute((weak))
+int main(const int argc, const char * const * const argv) {
+    /* input arguments, all in cycles, samples, or symbols per second */
+
+    /* centre frequency */
+    const float fc = argc > 1 ? strtof(argv[1], NULL) : 1500.0f;
+
+    /* bandwidth of modulation, also sample rate if critically sampled */
+    const float bw = argc > 2 ? strtof(argv[2], NULL) : 250.0f;
+
+    /* sample rate */
+    const float fs  = argc > 3 ? strtof(argv[3], NULL) : 48000.0f;
+
+    const float amplitude = argc > 4 ? strtof(argv[4], NULL) : 32766.0f;
+
+    /* this parameter also controls the spreading factor */
+    const unsigned bits_per_sweep = 5;
+
+    const unsigned interleave = 6;
+
+    if (interleave * FEC_N + bits_per_sweep > sizeof(unsigned long long) * CHAR_BIT) {
+        fprintf(stderr, "error: %s: interleave too long\n", __func__);
+        exit(EXIT_FAILURE);
+    }
+
+    fsckit(fgets_bytes, stdin, fwrite_sample, stdout, amplitude, fs, fc, bw, bits_per_sweep, interleave);
 }
