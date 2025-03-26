@@ -41,3 +41,9 @@ ISC license.
 [1] L. Vangelista, "Frequency shift chirp modulation: The LoRa modulation," IEEE Signal Processing Letters, vol. 24, no. 12, pp. 1818–1821, Dec 2017.
 
 [2] C. Bernier, F. Dehmas and N. Deparis, "Low Complexity LoRa Frame Synchronization for Ultra-Low Power Software-Defined Radios," in IEEE Transactions on Communications, vol. 68, no. 5, pp. 3140-3152, May 2020, doi: 10.1109/TCOMM.2020.2974464 https://cea.hal.science/cea-02280910/file/TCOM.pdf
+
+## Notes for maintainers
+
+### `dprintf`
+
+Debug text is emitted to `stderr` via `dprintf(2, ...)` instead of via `fprintf(stderr, ...)` to allow embedded usage without incurring any `malloc`/`free` activity within the loop.
