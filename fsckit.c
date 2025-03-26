@@ -13,11 +13,17 @@ static float complex renormalize(const float complex x) {
     return x * (3.0f - magsquared) * 0.5f;
 }
 
-static float complex emit_sweep(float complex carrier, const size_t T,
+static void fwrite_sample(void * ctx, const int16_t sample) {
+    fwrite(&sample, sizeof(int16_t), 1, ctx);
+}
+
+static float complex emit_sweep(void (* emit_sample_func)(void *, const int16_t),
+                                void * emit_sample_ctx,
+                                float complex carrier, const size_t T,
                                 const float complex advances[restrict static T],
                                 const size_t shift, const int down, const float amplitude) {
     for (size_t it = 0; it < T; it++) {
-        fwrite(&(int16_t) { lrintf(cimagf(carrier) * amplitude) }, sizeof(int16_t), 1, stdout);
+        emit_sample_func(emit_sample_ctx, lrintf(cimagf(carrier) * amplitude));
         carrier = renormalize(carrier * advances[((down ? T - it : it) + shift) % T]);
     }
     return carrier;
@@ -28,10 +34,13 @@ static unsigned degray(unsigned x) {
     return x;
 }
 
-static float complex emit_symbol(float complex carrier, const size_t T,
+static float complex emit_symbol(void (* emit_sample_func)(void *, const int16_t),
+                                 void * emit_sample_ctx,
+                                 float complex carrier, const size_t T,
                                  const float complex advances[restrict static T],
                                  const unsigned symbol,  const size_t L, const float amplitude) {
-    return emit_sweep(carrier, T, advances, degray(symbol) * L, 0, amplitude);
+    return emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T,
+                      advances, degray(symbol) * L, 0, amplitude);
 }
 
 static unsigned char hamming(unsigned char x) {
@@ -72,6 +81,9 @@ int main(const int argc, const char * const * const argv) {
         exit(EXIT_FAILURE);
     }
 
+    void (* emit_sample_func)(void *, const int16_t) = fwrite_sample;
+    void * emit_sample_ctx = stdout;
+
     /* number of unique measurable symbols is 2^bits_per_sweep */
     const size_t S = 1U << bits_per_sweep;
 
@@ -100,7 +112,7 @@ int main(const int argc, const char * const * const argv) {
 
     /* maybe emit some quiet samples */
     for (size_t ioffset = 0; ioffset < 4 * T; ioffset++)
-        fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
+        emit_sample_func(emit_sample_ctx, 0);
 
     /* loop over lines of text on stdin, emitting one message per line */
     char * bytes = NULL;
@@ -118,14 +130,14 @@ int main(const int argc, const char * const * const argv) {
         unsigned hash = 2166136261U;
 
         /* emit four unshifted upsweeps, with continuous carrier phase across sweeps */
-        carrier = emit_sweep(carrier, T, advances, 0, 0, amplitude);
-        carrier = emit_sweep(carrier, T, advances, 0, 0, amplitude);
-        carrier = emit_sweep(carrier, T, advances, 0, 0, amplitude);
-        carrier = emit_sweep(carrier, T, advances, 0, 0, amplitude);
+        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 0, amplitude);
+        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 0, amplitude);
+        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 0, amplitude);
+        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 0, amplitude);
 
         /* two unshifted downsweeps */
-        carrier = emit_sweep(carrier, T, advances, 0, 1, amplitude);
-        carrier = emit_sweep(carrier, T, advances, 0, 1, amplitude);
+        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 1, amplitude);
+        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 1, amplitude);
 
         const unsigned char len_hash = (2166136261U ^ (unsigned char)(B - 1)) * 16777619U;
 
@@ -138,7 +150,7 @@ int main(const int argc, const char * const * const argv) {
         for (size_t ibyte = 0; ibyte < B + 3 || bits_transposed_filled || bits_filled; ) {
             while (bits_transposed_filled >= bits_per_sweep) {
                 const unsigned symbol = bits_transposed & (S - 1U);
-                carrier = emit_symbol(carrier, T, advances, symbol, L, amplitude);
+                carrier = emit_symbol(emit_sample_func, emit_sample_ctx, carrier, T, advances, symbol, L, amplitude);
                 bits_transposed >>= bits_per_sweep;
                 bits_transposed_filled -= bits_per_sweep;
             }
@@ -192,13 +204,13 @@ int main(const int argc, const char * const * const argv) {
 
     const float initial_imag = cimagf(carrier);
     while (cimagf(carrier) * initial_imag > 0.0f) {
-        fwrite(&(int16_t) { lrintf(cimagf(carrier) * amplitude) }, sizeof(int16_t), 1, stdout);
+        emit_sample_func(emit_sample_ctx, lrintf(cimagf(carrier) * amplitude));
         carrier = renormalize(carrier * advances[0]);
     }
 
     /* emit some quiet samples to flush the decoder if being piped directly into it */
     for (size_t ioffset = 0; ioffset < 4 * T; ioffset++)
-        fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
+        emit_sample_func(emit_sample_ctx, 0);
 
     free(advances);
 }
