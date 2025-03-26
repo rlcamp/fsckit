@@ -174,6 +174,7 @@ static unsigned char soft_decode_hamming_naive(const float soft_bit_history[rest
     return is_best;
 }
 
+/* these are not really knobs, just magic numbers tied to the specific hamming code */
 #define FEC_N 7
 #define FEC_K 4
 

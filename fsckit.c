@@ -44,6 +44,7 @@ static unsigned hamming_one_full_byte(unsigned char x) {
     return hamming(x & 0xF) | (hamming(x >> 4U) << 7U);
 }
 
+/* these are not really knobs, just magic numbers tied to the specific hamming code */
 #define FEC_N 7
 #define FEC_K 4
 
