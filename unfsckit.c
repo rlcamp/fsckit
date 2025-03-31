@@ -252,6 +252,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
     unsigned int byte_in_progress = 0;
     unsigned char byte_in_progress_bits_filled = 0;
+    float sample_rate_adjustment = 1.0f;
 
     size_t ih_bit = 0, ih_consumed = 0;
 
@@ -279,8 +280,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
             /* decimate the filter output to a small integer multiple of nyquist rate */
             input_samples_since_filtered_sample++;
-            if (input_samples_since_filtered_sample + 0.5f < input_samples_per_filtered_sample) continue;
-            input_samples_since_filtered_sample -= input_samples_per_filtered_sample;
+            if (input_samples_since_filtered_sample + 0.5f < input_samples_per_filtered_sample * sample_rate_adjustment) continue;
+            input_samples_since_filtered_sample -= input_samples_per_filtered_sample * sample_rate_adjustment;
 
             /* store the basebanded filtered decimated samples in a ring buffer */
             basebanded_ring[(ih++) % H] = filtered;
@@ -310,6 +311,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 byte_in_progress = 0;
                 byte_in_progress_bits_filled = 0;
                 ibyte = 0;
+                sample_rate_adjustment = 1.0f;
                 state++;
             }
 
@@ -361,6 +363,12 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                         value_dn_prior) * (1.0f / 5.0f);
 
                             dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %ld Hz\r\n", __func__, iframe, ih_next_frame, lrintf(residual * bandwidth / S));
+
+                            /* if we assume that the carrier offset is primarily due to
+                             absolute rate error, we can nudge the sample rate */
+                            sample_rate_adjustment = expf(-(residual * bandwidth) / (S * f_carrier));
+                            dprintf(2, "%s: adjusting sample rate by one part in %ld\r\n", __func__, lrintf((S * f_carrier) / (residual * bandwidth)));
+
                             state++;
                         }
                         else dprintf(2, "%s: frame %u: possible downsweep\r\n", __func__, iframe);
