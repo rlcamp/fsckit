@@ -489,6 +489,7 @@ int main(const int argc, const char * const * const argv) {
     const float sample_rate = argc > 3 ? strtof(argv[3], NULL) : 48000.0f;
 
     setvbuf(stdin, NULL, _IONBF, 0);
+    setvbuf(stdout, NULL, _IONBF, 0);
 
     int16_t buf[32];
     unfsckit(get_samples_from_stdin, buf,
