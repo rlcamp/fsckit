@@ -473,13 +473,13 @@ static void put_bytes_to_stdout(const unsigned char * bytes, const size_t B, voi
 
 __attribute((weak))
 int main(const int argc, const char * const * const argv) {
-    const unsigned bits_per_sweep = 5;
-    const unsigned interleave = 6;
 
     /* input arguments, all in cycles, samples, or symbols per second */
     const float f_carrier = argc > 1 ? strtof(argv[1], NULL) : 1500.0f;
     const float bandwidth = argc > 2 ? strtof(argv[2], NULL) : 250.0f;
     const float sample_rate = argc > 3 ? strtof(argv[3], NULL) : 48000.0f;
+    const unsigned bits_per_sweep = argc > 4 ? strtoul(argv[4], NULL, 10) : 5;
+    const unsigned interleave = argc > 5 ? strtoul(argv[5], NULL, 10) : 6;
 
     setvbuf(stdin, NULL, _IONBF, 0);
     setvbuf(stdout, NULL, _IONBF, 0);

@@ -210,12 +210,12 @@ int main(const int argc, const char * const * const argv) {
     /* sample rate */
     const float fs  = argc > 3 ? strtof(argv[3], NULL) : 48000.0f;
 
-    const float amplitude = argc > 4 ? strtof(argv[4], NULL) : 32766.0f;
-
     /* this parameter also controls the spreading factor */
-    const unsigned bits_per_sweep = 5;
+    const unsigned bits_per_sweep = argc > 4 ? strtoul(argv[4], NULL, 10) : 5;
 
-    const unsigned interleave = 6;
+    const unsigned interleave = argc > 5 ? strtoul(argv[5], NULL, 10) : 6;
+
+    const float amplitude = argc > 6 ? strtof(argv[6], NULL) : 32766.0f;
 
     if (interleave * FEC_N + bits_per_sweep > sizeof(unsigned long long) * CHAR_BIT) {
         fprintf(stderr, "error: %s: interleave too long\n", __func__);
