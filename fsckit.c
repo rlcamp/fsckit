@@ -90,14 +90,26 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
         emit_sample_func(emit_sample_ctx, 0);
 
     /* loop over lines of text on stdin, or blocks of 256 bytes */
-    char bytes[257];
+    char bytes[2 + 256 + 1];
 
     while (1) {
-        const size_t B = get_bytes_func(get_bytes_ctx, sizeof(bytes) - 1, bytes);
+        /* read data bytes segment from stdin. note that fgets will fill the final byte
+         with a zero termination, but we will overwrite that byte with a checksum */
+        size_t B = get_bytes_func(get_bytes_ctx, sizeof(bytes) - 2, bytes + 2);
         if (!B) break;
 
-        /* fnv-1a initial value */
+        /* prepend the length of the message, and hash of the length */
+        bytes[0] = B - 1;
+        bytes[1] = (2166136261U ^ (unsigned char)(B - 1)) * 16777619U;
+
+        /* compute hash of the data bytes */
         unsigned hash = 2166136261U;
+        for (size_t ibyte = 0; ibyte < B; ibyte++)
+            hash = (hash ^ bytes[ibyte + 2]) * 16777619U;
+
+        /* append hash and expand the overall msg size as seen by the rest of the code */
+        B += 3;
+        bytes[B - 1] = hash;
 
         /* emit four unshifted upsweeps, with continuous carrier phase across sweeps */
         carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 0, amplitude);
@@ -109,15 +121,13 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
         carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 1, amplitude);
         carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 1, amplitude);
 
-        const unsigned char len_hash = (2166136261U ^ (unsigned char)(B - 1)) * 16777619U;
-
         unsigned long long bits = 0;
         size_t bits_filled = 0;
 
         unsigned long long bits_transposed = 0;
         size_t bits_transposed_filled = 0;
 
-        for (size_t ibyte = 0; ibyte < B + 3 || bits_transposed_filled || bits_filled; ) {
+        for (size_t ibyte = 0; ibyte < B || bits_transposed_filled || bits_filled; ) {
             while (bits_transposed_filled >= bits_per_sweep) {
                 const unsigned symbol = bits_transposed & (S - 1U);
                 carrier = emit_symbol(emit_sample_func, emit_sample_ctx, carrier, T, advances, symbol, L, amplitude);
@@ -125,7 +135,7 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
                 bits_transposed_filled -= bits_per_sweep;
             }
 
-            if (ibyte == B + 3 && bits_transposed_filled && !bits_filled)
+            if (ibyte == B && bits_transposed_filled && !bits_filled)
             /* if no more transposed bits are coming and we have a partially completed
              sweep, then just enqueue the difference */
                 bits_transposed_filled = bits_per_sweep;
@@ -147,25 +157,18 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
                 bits_transposed_filled += interleave * FEC_N;
             }
 
-            /* if we can enqueue another full byte... */
-            while (bits_filled + 2 * FEC_N <= sizeof(bits) * CHAR_BIT && ibyte < B + 3) {
-                /* the next byte to send is either the message length, its hash, a data
-                 byte, or the hash of all the data bytes */
-                const unsigned char byte = (0 == ibyte ? B - 1 :
-                                            1 == ibyte ? len_hash :
-                                            ibyte < B + 2 ? bytes[ibyte - 2] :
-                                            ibyte == B + 2 ? hash : 0);
+            /* if we can enqueue another full byte, or need to emit some padding... */
+            while (bits_filled + 2 * FEC_N <= sizeof(bits) * CHAR_BIT && ibyte < B) {
+                const unsigned char byte = ibyte < B ? bytes[ibyte] : 0;
                 bits |= (unsigned long long)hamming_one_full_byte(byte) << bits_filled;
                 bits_filled += 2 * FEC_N;
-
-                if (ibyte >= 2) hash = (hash ^ byte) * 16777619U;
 
                 ibyte++;
             }
 
             /* if no more bits are coming from upstream and we need to complete a transpose
              group, then just enqueue the difference in zero bits */
-            if (ibyte == B + 3 && bits_filled && bits_transposed_filled < interleave * FEC_N)
+            if (ibyte == B && bits_filled && bits_transposed_filled < interleave * FEC_N)
                 bits_filled = interleave * FEC_N;
         }
     }
