@@ -86,7 +86,7 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
     float complex carrier = 1.0f;
 
     /* maybe emit some quiet samples */
-    for (size_t ioffset = 0; ioffset < 4 * T; ioffset++)
+    for (size_t ioffset = 0; ioffset < T; ioffset++)
         emit_sample_func(emit_sample_ctx, 0);
 
     /* loop over lines of text on stdin, or blocks of 256 bytes */
@@ -180,7 +180,7 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
     }
 
     /* emit some quiet samples to flush the decoder if being piped directly into it */
-    for (size_t ioffset = 0; ioffset < 4 * T; ioffset++)
+    for (size_t ioffset = 0; ioffset < T; ioffset++)
         emit_sample_func(emit_sample_ctx, 0);
 
     free(advances);
