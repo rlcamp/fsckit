@@ -193,7 +193,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
      using a value larger than 1 allows finer time alignment of input to the demodulator,
      at the expense of more sram usage (but NOT more computational load). the demodulator
      itself always runs at the critical sampling rate s.t the chirps exactly wrap around */
-    const size_t L = 2;
+    const size_t L = 4;
     const float sample_rate_filtered = L * bandwidth;
 
     /* initial value and advance rate of the local oscillator for basebanding */
