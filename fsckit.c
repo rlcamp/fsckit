@@ -17,13 +17,17 @@ static float complex renormalize(const float complex x) {
 static float complex emit_sweep(void (* emit_sample_func)(void *, const int16_t),
                                 void * emit_sample_ctx,
                                 float complex carrier, const size_t T,
-                                const float complex advances[restrict static T],
+                                const float complex modulation_advances[restrict static T],
+                                const float complex carrier_advance,
                                 const size_t shift, const int down, const float amplitude) {
+    float complex modulation = 1.0f;
+
     for (size_t it = 0; it < T; it++) {
-        emit_sample_func(emit_sample_ctx, lrintf(cimagf(carrier) * amplitude));
-        carrier = renormalize(carrier * advances[((down ? T - it : it) + shift) % T]);
+        emit_sample_func(emit_sample_ctx, lrintf(cimagf(carrier * modulation) * amplitude));
+        modulation = renormalize(modulation * modulation_advances[((down ? T - it : it) + shift) % T]);
+        carrier = renormalize(carrier * carrier_advance);
     }
-    return carrier;
+    return carrier * modulation;
 }
 
 static unsigned degray(unsigned x) {
@@ -34,10 +38,11 @@ static unsigned degray(unsigned x) {
 static float complex emit_symbol(void (* emit_sample_func)(void *, const int16_t),
                                  void * emit_sample_ctx,
                                  float complex carrier, const size_t T,
-                                 const float complex advances[restrict static T],
+                                 const float complex modulation_advances[restrict static T],
+                                 const float complex carrier_advance,
                                  const unsigned symbol,  const size_t L, const float amplitude) {
     return emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T,
-                      advances, degray(symbol) * L, 0, amplitude);
+                      modulation_advances, carrier_advance, degray(symbol) * L, 0, amplitude);
 }
 
 static unsigned char hamming(unsigned char x) {
@@ -74,16 +79,17 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
     /* sweep rate in Hz per second */
     const float df_dt = bw * fs / T;
 
-    float complex * restrict const advances = malloc(sizeof(float complex) * T);
+    float complex * restrict const modulation_advances = malloc(sizeof(float complex) * T);
     const float complex advance_advance = cexpf(I * 2.0f * (float)M_PI * df_dt / (fs * fs));
-    advances[0] = cexpf(I * 2.0f * (float)M_PI * (fc - 0.5f * bw) / fs);
+    modulation_advances[0] = cexpf(I * 2.0f * (float)M_PI * -0.5f * bw / fs);
 
     /* apply recurrence relation to generate lookup table of carrier advancements */
     for (size_t it = 1; it < T; it++)
-        advances[it] = renormalize(advances[it - 1] * advance_advance);
+        modulation_advances[it] = renormalize(modulation_advances[it - 1] * advance_advance);
 
     /* initial state of carrier */
     float complex carrier = 1.0f;
+    const float complex carrier_advance = cexpf(I * 2.0f * (float)M_PI * fc / fs);
 
     /* maybe emit some quiet samples */
     for (size_t ioffset = 0; ioffset < T; ioffset++)
@@ -112,14 +118,14 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
         bytes[B - 1] = hash;
 
         /* emit four unshifted upsweeps, with continuous carrier phase across sweeps */
-        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 0, amplitude);
-        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 0, amplitude);
-        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 0, amplitude);
-        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 0, amplitude);
+        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, 0, 0, amplitude);
+        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, 0, 0, amplitude);
+        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, 0, 0, amplitude);
+        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, 0, 0, amplitude);
 
         /* two unshifted downsweeps */
-        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 1, amplitude);
-        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, advances, 0, 1, amplitude);
+        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, 0, 1, amplitude);
+        carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, 0, 1, amplitude);
 
         unsigned long long bits = 0;
         size_t bits_filled = 0;
@@ -130,7 +136,7 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
         for (size_t ibyte = 0; ibyte < B || bits_transposed_filled || bits_filled; ) {
             while (bits_transposed_filled >= bits_per_sweep) {
                 const unsigned symbol = bits_transposed & (S - 1U);
-                carrier = emit_symbol(emit_sample_func, emit_sample_ctx, carrier, T, advances, symbol, L, amplitude);
+                carrier = emit_symbol(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, symbol, L, amplitude);
                 bits_transposed >>= bits_per_sweep;
                 bits_transposed_filled -= bits_per_sweep;
             }
@@ -176,14 +182,14 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
     const float initial_imag = cimagf(carrier);
     while (cimagf(carrier) * initial_imag > 0.0f) {
         emit_sample_func(emit_sample_ctx, lrintf(cimagf(carrier) * amplitude));
-        carrier = renormalize(carrier * advances[0]);
+        carrier = renormalize(carrier * carrier_advance);
     }
 
     /* emit some quiet samples to flush the decoder if being piped directly into it */
     for (size_t ioffset = 0; ioffset < T; ioffset++)
         emit_sample_func(emit_sample_ctx, 0);
 
-    free(advances);
+    free(modulation_advances);
 }
 
 #include <stdio.h>
