@@ -90,10 +90,6 @@ float complex fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char b
     /* initial state of carrier */
     const float complex carrier_advance = cexpf(I * 2.0f * (float)M_PI * fc / fs);
 
-    /* maybe emit some quiet samples */
-    for (size_t ioffset = 0; ioffset < T; ioffset++)
-        emit_sample_func(emit_sample_ctx, 0);
-
     /* loop over lines of text on stdin, or blocks of 256 bytes */
     char bytes[257];
 
@@ -181,10 +177,6 @@ float complex fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char b
         carrier = renormalize(carrier * carrier_advance);
     }
 
-    /* emit some quiet samples to flush the decoder if being piped directly into it */
-    for (size_t ioffset = 0; ioffset < T; ioffset++)
-        emit_sample_func(emit_sample_ctx, 0);
-
     free(modulation_advances);
 
     return carrier;
@@ -226,7 +218,17 @@ int main(const int argc, const char * const * const argv) {
         exit(EXIT_FAILURE);
     }
 
+    const size_t chirp_period_in_samples = (1U << bits_per_sweep) * lrintf(fs / bw);
+
+    /* emit one sweep period of quiet samples */
+    for (size_t it = 0; it < chirp_period_in_samples; it++)
+        fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
+
     float complex carrier = 1.0f;
 
     carrier = fsckit(fgets_bytes, stdin, fwrite_sample, stdout, amplitude, fs, fc, bw, bits_per_sweep, interleave, carrier);
+
+    /* emit some quiet samples to flush the decoder if being piped directly into it */
+    for (size_t it = 0; it < chirp_period_in_samples; it++)
+        fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
 }
