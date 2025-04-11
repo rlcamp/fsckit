@@ -258,8 +258,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     /* this will be (re)initialized and then updated as each data symbol comes in */
     unsigned hash = 0;
 
-    unsigned long long byte_in_progress = 0;
-    unsigned char byte_in_progress_bits_filled = 0;
+    unsigned long long decoded_bits = 0;
+    unsigned char decoded_bits_filled = 0;
 
     size_t ih_bit = 0;
 
@@ -314,8 +314,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 iframe_at_last_reset = iframe;
                 residual = 0;
                 ih_bit = 0;
-                byte_in_progress = 0;
-                byte_in_progress_bits_filled = 0;
+                decoded_bits = 0;
+                decoded_bits_filled = 0;
                 ibyte = 0;
                 state++;
             }
@@ -396,13 +396,13 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     if (ih_bit == interleave * FEC_N) {
                         const unsigned long long bits = soft_decode_block_hamming(soft_bit_history, interleave);
 
-                        byte_in_progress |= bits << byte_in_progress_bits_filled;
-                        byte_in_progress_bits_filled += interleave * FEC_K;
+                        decoded_bits |= bits << decoded_bits_filled;
+                        decoded_bits_filled += interleave * FEC_K;
 
-                        while (byte_in_progress_bits_filled >= 8) {
-                            const unsigned char byte = byte_in_progress;
-                            byte_in_progress >>= 8;
-                            byte_in_progress_bits_filled -= 8;
+                        while (decoded_bits_filled >= 8) {
+                            const unsigned char byte = decoded_bits;
+                            decoded_bits >>= 8;
+                            decoded_bits_filled -= 8;
 
                             if (0 == ibyte)
                             /* the first byte encodes the size of the message, from 1 to 256 */
