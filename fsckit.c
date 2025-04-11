@@ -98,7 +98,7 @@ float complex fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char b
     char bytes[257];
 
     while (1) {
-        const size_t B = get_bytes_func(get_bytes_ctx, sizeof(bytes) - 1, bytes);
+        const size_t B = get_bytes_func(get_bytes_ctx, sizeof(bytes), bytes);
         if (!B) break;
 
         /* fnv-1a initial value */
