@@ -466,10 +466,15 @@ static const int16_t * get_samples_from_stdin(const int16_t ** end_p, size_t * s
     return buf;
 }
 
+static int last_byte = -1;
+
 static void put_bytes_to_stdout(const unsigned char * bytes, const size_t B, void * ctx) {
     (void)ctx;
     fwrite(bytes, 1, B, stdout);
+    last_byte = bytes[B - 1];
 }
+
+#include <unistd.h>
 
 __attribute((weak))
 int main(const int argc, const char * const * const argv) {
@@ -489,5 +494,6 @@ int main(const int argc, const char * const * const argv) {
              put_bytes_to_stdout, NULL,
              sample_rate, f_carrier, bandwidth, bits_per_sweep, interleave);
 
-    fputc('\n', stdout);
+    if (last_byte != -1 && last_byte != '\n' && isatty(STDOUT_FILENO))
+        fputc('\n', stdout);
 }
