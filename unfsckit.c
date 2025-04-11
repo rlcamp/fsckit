@@ -183,8 +183,8 @@ static unsigned long long soft_decode_block_hamming(const float soft_bit_history
 }
 
 /* these are not really knobs, just magic numbers tied to the specific hamming code */
-#define FEC_N 7
-#define FEC_K 4
+#define HAMMING_N 7
+#define HAMMING_K 4
 
 /* KNOB: half of the number of butterworth filter poles. overall cpu usage is linear with
  this parameter. too many stages can distort the passband response, too few admits noise */
@@ -222,12 +222,15 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     /* length of buffer of critically sampled complex timeseries */
     const size_t H = 4 * S * L;
 
+    /* properties of the block code */
+    const size_t N = HAMMING_N * interleave, K = HAMMING_K * interleave;
+
     struct planned_forward_fft * plan = plan_forward_fft_of_length(S);
     float complex * restrict const basebanded_ring = malloc(sizeof(float complex) * H);
     float complex * restrict const fft_input = malloc(sizeof(float complex) * S);
     float complex * restrict const fft_output = malloc(sizeof(float complex) * S);
     float complex * restrict const advances = malloc(sizeof(float complex) * S * L);
-    float * restrict const soft_bit_history = malloc(sizeof(float) * FEC_N * interleave);
+    float * restrict const soft_bit_history = malloc(sizeof(float) * N);
 
     populate_advances(S, L, advances);
 
@@ -393,11 +396,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     soft_bit_history[ih_bit++] = soft_bit_decision_from_fft(ibit, S, fft_output);
 
                     /* whenever we have a complete block of interleaved hamming codes... */
-                    if (ih_bit == interleave * FEC_N) {
+                    if (ih_bit == N) {
                         const unsigned long long bits = soft_decode_block_hamming(soft_bit_history, interleave);
 
                         decoded_bits |= bits << decoded_bits_filled;
-                        decoded_bits_filled += interleave * FEC_K;
+                        decoded_bits_filled += K;
 
                         while (decoded_bits_filled >= 8) {
                             const unsigned char byte = decoded_bits;
@@ -479,6 +482,7 @@ static void put_bytes_to_stdout(const unsigned char * bytes, const size_t B, voi
 }
 
 #include <unistd.h>
+#include <assert.h>
 
 __attribute((weak))
 int main(const int argc, const char * const * const argv) {
@@ -489,6 +493,8 @@ int main(const int argc, const char * const * const argv) {
     const float sample_rate = argc > 3 ? strtof(argv[3], NULL) : 48000.0f;
     const unsigned bits_per_sweep = argc > 4 ? strtoul(argv[4], NULL, 10) : 5;
     const unsigned interleave = argc > 5 ? strtoul(argv[5], NULL, 10) : 6;
+
+    assert(interleave * HAMMING_K <= 56);
 
     setvbuf(stdin, NULL, _IONBF, 0);
     setvbuf(stdout, NULL, _IONBF, 0);
