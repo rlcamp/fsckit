@@ -13,6 +13,10 @@ static float complex renormalize(const float complex x) {
     return x * (3.0f - magsquared) * 0.5f;
 }
 
+static float complex cosisinf(const float x) {
+    return cosf(x) + I * sinf(x);
+}
+
 static float complex emit_sweep(void (* emit_sample_func)(void *, const int16_t),
                                 void * emit_sample_ctx,
                                 float complex carrier, const size_t T,
@@ -75,15 +79,15 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
     const float df_dt = bw * fs / T;
 
     float complex * restrict const modulation_advances = malloc(sizeof(float complex) * T);
-    const float complex advance_advance = cexpf(I * 2.0f * (float)M_PI * df_dt / (fs * fs));
-    modulation_advances[0] = cexpf(I * 2.0f * (float)M_PI * -0.5f * bw / fs);
+    const float complex advance_advance = cosisinf(2.0f * (float)M_PI * df_dt / (fs * fs));
+    modulation_advances[0] = cosisinf(2.0f * (float)M_PI * -0.5f * bw / fs);
 
     /* apply recurrence relation to generate lookup table of carrier advancements */
     for (size_t it = 1; it < T; it++)
         modulation_advances[it] = renormalize(modulation_advances[it - 1] * advance_advance);
 
     /* initial state of carrier */
-    const float complex carrier_advance = cexpf(I * 2.0f * (float)M_PI * fc / fs);
+    const float complex carrier_advance = cosisinf(2.0f * (float)M_PI * fc / fs);
 
     /* fnv-1a initial value */
     unsigned hash = 2166136261U;
