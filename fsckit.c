@@ -59,6 +59,18 @@ static unsigned hamming_one_full_byte(unsigned char x) {
 #define FEC_N 7
 #define FEC_K 4
 
+float complex stop_carrier_at_zero(void (* emit_sample_func)(void *, const int16_t), void * emit_sample_ctx,
+                                   float complex carrier, const float fs, const float fc, const float amplitude) {
+    const float complex carrier_advance = cexpf(I * 2.0f * (float)M_PI * fc / fs);
+    const float initial_imag = cimagf(carrier);
+    while (cimagf(carrier) * initial_imag > 0.0f) {
+        emit_sample_func(emit_sample_ctx, lrintf(cimagf(carrier) * amplitude));
+        carrier = renormalize(carrier * carrier_advance);
+    }
+
+    return carrier;
+}
+
 float complex fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restrict static Bmax]),
                      void * get_bytes_ctx,
                      void (* emit_sample_func)(void *, const int16_t), void * emit_sample_ctx,
@@ -171,12 +183,6 @@ float complex fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char b
         }
     }
 
-    const float initial_imag = cimagf(carrier);
-    while (cimagf(carrier) * initial_imag > 0.0f) {
-        emit_sample_func(emit_sample_ctx, lrintf(cimagf(carrier) * amplitude));
-        carrier = renormalize(carrier * carrier_advance);
-    }
-
     free(modulation_advances);
 
     return carrier;
@@ -227,6 +233,8 @@ int main(const int argc, const char * const * const argv) {
     float complex carrier = 1.0f;
 
     carrier = fsckit(fgets_bytes, stdin, fwrite_sample, stdout, amplitude, fs, fc, bw, bits_per_sweep, interleave, carrier);
+
+    carrier = stop_carrier_at_zero(fwrite_sample, stdout, carrier, fs, fc, amplitude);
 
     /* emit some quiet samples to flush the decoder if being piped directly into it */
     for (size_t it = 0; it < chirp_period_in_samples; it++)
