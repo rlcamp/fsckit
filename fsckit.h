@@ -2,8 +2,7 @@
 #include <stdint.h>
 #include <complex.h>
 
-float complex fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restrict static Bmax]),
-                     void * get_bytes_ctx,
-                     void (* emit_sample_func)(void *, const int16_t), void * emit_sample_ctx,
+float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * emit_sample_ctx,
                      const float amplitude, const float fs, const float fc, const float bw,
-                     const unsigned bits_per_sweep, const unsigned interleave, float complex carrier);
+                     const unsigned bits_per_sweep, const unsigned interleave, float complex carrier,
+                     const size_t B, const unsigned char bytes[restrict static B]);

@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <math.h>
 #include <complex.h>
-#include <assert.h>
 #include <string.h>
 #include <limits.h>
 
@@ -83,9 +82,6 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
 
     /* output samples per symbol */
     const size_t T = S * L;
-
-    /* enforce oversampling factor is an integer */
-    assert((size_t)lrintf(S * fs / bw) == T);
 
     /* sweep rate in Hz per second */
     const float df_dt = bw * fs / T;
@@ -211,6 +207,12 @@ int main(const int argc, const char * const * const argv) {
     }
 
     const size_t chirp_period_in_samples = (1U << bits_per_sweep) * lrintf(fs / bw);
+
+    /* enforce oversampling factor is an integer */
+    if ((size_t)lrintf((1U << bits_per_sweep) * fs / bw) != chirp_period_in_samples) {
+        fprintf(stderr, "%s: sample rate not an exact multiple of bandwidth\n", __func__);
+        exit(EXIT_FAILURE);
+    }
 
     /* emit one sweep period of quiet samples */
     for (size_t it = 0; it < chirp_period_in_samples; it++)
