@@ -54,10 +54,6 @@ static unsigned char hamming(unsigned char x) {
                 (((x >> 0U) ^ (x >> 1U) ^ (x >> 3U)) & 0x1) << 6U);
 }
 
-static unsigned hamming_one_full_byte(unsigned char x) {
-    return hamming(x & 0xF) | (hamming(x >> 4U) << 7U);
-}
-
 /* these are not really knobs, just magic numbers tied to the specific hamming code */
 #define HAMMING_N 7
 #define HAMMING_K 4
@@ -104,13 +100,13 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
 
     const unsigned char len_hash = (2166136261U ^ (unsigned char)(B - 1)) * 16777619U;
 
-    unsigned long long bits = 0;
-    size_t bits_filled = 0;
+    unsigned long long data_bits = 0;
+    size_t data_bits_filled = 0;
 
     unsigned long long coded_bits = 0;
     size_t coded_bits_filled = 0;
 
-    for (size_t ibyte = 0; ibyte < B + 3 || coded_bits_filled || bits_filled; ) {
+    for (size_t ibyte = 0; ibyte < B + 3 || coded_bits_filled || data_bits_filled; ) {
         while (coded_bits_filled >= bits_per_sweep) {
             const unsigned symbol = coded_bits & (S - 1U);
             carrier = emit_symbol(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, symbol, L, amplitude);
@@ -118,38 +114,42 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
             coded_bits_filled -= bits_per_sweep;
         }
 
-        if (ibyte == B + 3 && coded_bits_filled && !bits_filled)
+        if (ibyte == B + 3 && coded_bits_filled && !data_bits_filled)
         /* if no more transposed bits are coming and we have a partially completed
          sweep, then just enqueue the difference */
             coded_bits_filled = bits_per_sweep;
 
         while (coded_bits_filled + interleave * HAMMING_N <= sizeof(coded_bits) * CHAR_BIT &&
-               bits_filled >= interleave * HAMMING_N) {
+               data_bits_filled >= interleave * HAMMING_K) {
 
-            for (size_t ib = 0, ibit = 0; ib < interleave; ib++)
-                for (size_t ia = 0; ia < HAMMING_N; ia++, ibit++) {
+            for (size_t ib = 0; ib < interleave; ib++) {
+                const unsigned int bits_now = hamming((data_bits >> (ib * HAMMING_K)) & 0xF);
+
+                for (size_t ia = 0; ia < HAMMING_N; ia++) {
                     const unsigned long long mask = 1ULL << (ib + interleave * ia + coded_bits_filled);
-                    if (bits & (1ULL << ibit))
+                    if (bits_now & (1ULL << ia))
                         coded_bits |= mask;
                     else
                         coded_bits &= ~mask;
                 }
+            }
 
-            bits >>= interleave * HAMMING_N;
-            bits_filled -= interleave * HAMMING_N;
+            data_bits >>= interleave * HAMMING_K;
+            data_bits_filled -= interleave * HAMMING_K;
             coded_bits_filled += interleave * HAMMING_N;
         }
 
         /* if we can enqueue another full byte... */
-        while (bits_filled + 2 * HAMMING_N <= sizeof(bits) * CHAR_BIT && ibyte < B + 3) {
+        while (data_bits_filled + 8 <= sizeof(data_bits) * CHAR_BIT && ibyte < B + 3) {
             /* the next byte to send is either the message length, its hash, a data
              byte, or the hash of all the data bytes */
             const unsigned char byte = (0 == ibyte ? B - 1 :
                                         1 == ibyte ? len_hash :
                                         ibyte < B + 2 ? bytes[ibyte - 2] :
                                         ibyte == B + 2 ? hash : 0);
-            bits |= (unsigned long long)hamming_one_full_byte(byte) << bits_filled;
-            bits_filled += 2 * HAMMING_N;
+
+            data_bits |= (unsigned long long)byte << data_bits_filled;
+            data_bits_filled += 8;
 
             if (ibyte >= 2) hash = (hash ^ byte) * 16777619U;
 
@@ -158,8 +158,8 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
 
         /* if no more bits are coming from upstream and we need to complete a transpose
          group, then just enqueue the difference in zero bits */
-        if (ibyte == B + 3 && bits_filled && coded_bits_filled < interleave * HAMMING_N)
-            bits_filled = interleave * HAMMING_N;
+        if (ibyte == B + 3 && data_bits_filled && coded_bits_filled < interleave * HAMMING_K)
+            data_bits_filled = interleave * HAMMING_K;
     }
 
     free(modulation_advances);
