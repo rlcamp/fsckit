@@ -91,6 +91,9 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
     /* sweep rate in Hz per second */
     const float df_dt = bw * fs / T;
 
+    /* properties of the block code */
+    const size_t N = HAMMING_N * interleave, K = HAMMING_K * interleave;
+
     float complex * restrict const modulation_advances = malloc(sizeof(float complex) * T);
     const float complex advance_advance = cosisinf(2.0f * (float)M_PI * df_dt / (fs * fs));
     modulation_advances[0] = cosisinf(2.0f * (float)M_PI * -0.5f * bw / fs);
@@ -136,14 +139,13 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
          sweep, then just enqueue the difference */
             coded_bits_filled = bits_per_sweep;
 
-        while (coded_bits_filled + interleave * HAMMING_N <= sizeof(coded_bits) * CHAR_BIT &&
-               data_bits_filled >= interleave * HAMMING_K) {
+        while (coded_bits_filled + N <= sizeof(coded_bits) * CHAR_BIT &&
+               data_bits_filled >= K) {
 
             coded_bits |= hamming_interleaved(data_bits, interleave) << coded_bits_filled;
-
-            data_bits >>= interleave * HAMMING_K;
-            data_bits_filled -= interleave * HAMMING_K;
-            coded_bits_filled += interleave * HAMMING_N;
+            data_bits >>= K;
+            data_bits_filled -= K;
+            coded_bits_filled += N;
         }
 
         /* if we can enqueue another full byte... */
@@ -165,8 +167,8 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
 
         /* if no more bits are coming from upstream and we need to complete a transpose
          group, then just enqueue the difference in zero bits */
-        if (ibyte == B + 3 && data_bits_filled && coded_bits_filled < interleave * HAMMING_K)
-            data_bits_filled = interleave * HAMMING_K;
+        if (ibyte == B + 3 && data_bits_filled && coded_bits_filled < K)
+            data_bits_filled = K;
     }
 
     free(modulation_advances);
