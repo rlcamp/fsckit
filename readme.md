@@ -1,4 +1,4 @@
-# fsckit/unfsckit
+# Chirp FSK modulator/demodulator
 
 This is a proof-of-concept digital modulation loosely inspired by LoRa[1], which has some properties desirable for acoustic communications over unreliable channels.
 
@@ -18,11 +18,13 @@ If the next-downstream logic is a soft-decision forward error correcting decoder
 
 ### Spreading factor
 
-This modulation falls under the category of "spread spectrum" techniques in that there is a knob that controls spectral redundancy. Since each symbol encodes one of S unique values (and therefore, N = log2(S) bits) and has a duration linearly proportional to S, the redundancy factor is S / log2(S), or equivalently, 2^N / N. Values of N of interest to us range from 4 to 6 (compare to LoRa which uses values of N from 7 to 12 inclusive, in 125-500 kHz of bandwidth around 1 GHz).
+This modulation falls under the category of "spread spectrum" techniques in that there is a knob that controls spectral redundancy. Since each symbol encodes one of S unique values (and therefore, N = log2(S) bits) and has a duration linearly proportional to S, the redundancy factor is S / log2(S), or equivalently, 2^N / N. Values of N of interest to us range from 3 to 6 (compare to LoRa which uses values of N from 7 to 12 inclusive, in 125-500 kHz of bandwidth around 1 GHz).
 
 ### Forward error correction
 
-The current implementation uses a Hamming 7,4 code with a controllable amount of interleaving between it and the chirp layer. Without interleaving, the Hamming layer is not actually adding any value vs simply using a larger chirp spreading factor. The interleaving factor L should be matched to the expected channel conditions (that is, `L / (S * bandwidth)` should be greater than or equal to the expected channel coherence time). After deinterleaving, The receiver does a dumb simple exhaustive naive maximum-likelihood brute force search for the most likely uncorrupted code word using soft bit decisions as inputs. We can probably do better, but bear in mind this needs to work on a microcontroller with almost no available memory.
+The current implementation uses a Hamming 7,4 code with a controllable amount of interleaving between it and the chirp layer. Without interleaving, the Hamming layer would not actually add any value vs simply using a larger spreading factor in the chirp layer. The interleaving factor should be matched to the expected channel conditions (that is, the effective time between each of the 7 bits should be greater than the expected duration of an interference burst).
+
+After deinterleaving, the receiver does a dumb simple exhaustive naive maximum-likelihood brute force search for the most likely uncorrupted code word using soft bit decisions as inputs. We can probably do better, but bear in mind this needs to work on a microcontroller with almost no available memory.
 
 ### Todo
 
