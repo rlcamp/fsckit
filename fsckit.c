@@ -59,11 +59,11 @@ static unsigned hamming_one_full_byte(unsigned char x) {
 #define FEC_N 7
 #define FEC_K 4
 
-void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restrict static Bmax]),
-            void * get_bytes_ctx,
-            void (* emit_sample_func)(void *, const int16_t), void * emit_sample_ctx,
-            const float amplitude, const float fs, const float fc, const float bw,
-            const unsigned bits_per_sweep, const unsigned interleave) {
+float complex fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restrict static Bmax]),
+                     void * get_bytes_ctx,
+                     void (* emit_sample_func)(void *, const int16_t), void * emit_sample_ctx,
+                     const float amplitude, const float fs, const float fc, const float bw,
+                     const unsigned bits_per_sweep, const unsigned interleave, float complex carrier) {
     /* number of unique measurable symbols is 2^bits_per_sweep */
     const size_t S = 1U << bits_per_sweep;
 
@@ -88,7 +88,6 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
         modulation_advances[it] = renormalize(modulation_advances[it - 1] * advance_advance);
 
     /* initial state of carrier */
-    float complex carrier = 1.0f;
     const float complex carrier_advance = cexpf(I * 2.0f * (float)M_PI * fc / fs);
 
     /* maybe emit some quiet samples */
@@ -187,6 +186,8 @@ void fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restri
         emit_sample_func(emit_sample_ctx, 0);
 
     free(modulation_advances);
+
+    return carrier;
 }
 
 #include <stdio.h>
@@ -225,5 +226,7 @@ int main(const int argc, const char * const * const argv) {
         exit(EXIT_FAILURE);
     }
 
-    fsckit(fgets_bytes, stdin, fwrite_sample, stdout, amplitude, fs, fc, bw, bits_per_sweep, interleave);
+    float complex carrier = 1.0f;
+
+    carrier = fsckit(fgets_bytes, stdin, fwrite_sample, stdout, amplitude, fs, fc, bw, bits_per_sweep, interleave, carrier);
 }
