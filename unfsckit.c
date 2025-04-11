@@ -174,6 +174,14 @@ static unsigned char soft_decode_hamming_naive(const float soft_bit_history[rest
     return is_best;
 }
 
+static unsigned long long soft_decode_block_hamming(const float soft_bit_history[restrict], const size_t interleave) {
+    unsigned long long ret = 0;
+
+    for (size_t iblock = 0; iblock < interleave; iblock++)
+        ret |= soft_decode_hamming_naive(soft_bit_history + iblock, interleave) << 4U * iblock;
+    return ret;
+}
+
 /* these are not really knobs, just magic numbers tied to the specific hamming code */
 #define FEC_N 7
 #define FEC_K 4
@@ -250,10 +258,10 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     /* this will be (re)initialized and then updated as each data symbol comes in */
     unsigned hash = 0;
 
-    unsigned int byte_in_progress = 0;
+    unsigned long long byte_in_progress = 0;
     unsigned char byte_in_progress_bits_filled = 0;
 
-    size_t ih_bit = 0, ih_consumed = 0;
+    size_t ih_bit = 0;
 
     unsigned iframe = 0, iframe_at_last_reset = 0;
 
@@ -306,7 +314,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 iframe_at_last_reset = iframe;
                 residual = 0;
                 ih_bit = 0;
-                ih_consumed = 0;
                 byte_in_progress = 0;
                 byte_in_progress_bits_filled = 0;
                 ibyte = 0;
@@ -385,14 +392,14 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 for (size_t ibit = 0; ibit < bits_per_sweep; ibit++) {
                     soft_bit_history[ih_bit++] = soft_bit_decision_from_fft(ibit, S, fft_output);
 
-                    /* while we can hamming decode some interleaved bits... */
-                    while (ih_bit > ih_consumed + interleave * (FEC_N - 1)) {
-                        const unsigned char bits = soft_decode_hamming_naive(soft_bit_history + ih_consumed, interleave);
-                        ih_consumed++;
+                    /* whenever we have a complete block of interleaved hamming codes... */
+                    if (ih_bit == interleave * FEC_N) {
+                        const unsigned long long bits = soft_decode_block_hamming(soft_bit_history, interleave);
 
                         byte_in_progress |= bits << byte_in_progress_bits_filled;
-                        byte_in_progress_bits_filled += FEC_K;
-                        if (byte_in_progress_bits_filled >= 8) {
+                        byte_in_progress_bits_filled += interleave * FEC_K;
+
+                        while (byte_in_progress_bits_filled >= 8) {
                             const unsigned char byte = byte_in_progress;
                             byte_in_progress >>= 8;
                             byte_in_progress_bits_filled -= 8;
@@ -435,11 +442,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                             }
                             ibyte++;
                         }
-                    }
 
-                    if (ih_consumed == interleave) {
                         ih_bit = 0;
-                        ih_consumed = 0;
                     }
                 }
             }
