@@ -59,8 +59,8 @@ static unsigned hamming_one_full_byte(unsigned char x) {
 }
 
 /* these are not really knobs, just magic numbers tied to the specific hamming code */
-#define FEC_N 7
-#define FEC_K 4
+#define HAMMING_N 7
+#define HAMMING_K 4
 
 float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * emit_sample_ctx,
                      const float amplitude, const float fs, const float fc, const float bw,
@@ -123,11 +123,11 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
          sweep, then just enqueue the difference */
             bits_transposed_filled = bits_per_sweep;
 
-        while (bits_transposed_filled + interleave * FEC_N <= sizeof(bits_transposed) * CHAR_BIT &&
-               bits_filled >= interleave * FEC_N) {
+        while (bits_transposed_filled + interleave * HAMMING_N <= sizeof(bits_transposed) * CHAR_BIT &&
+               bits_filled >= interleave * HAMMING_N) {
 
             for (size_t ib = 0, ibit = 0; ib < interleave; ib++)
-                for (size_t ia = 0; ia < FEC_N; ia++, ibit++) {
+                for (size_t ia = 0; ia < HAMMING_N; ia++, ibit++) {
                     const unsigned long long mask = 1ULL << (ib + interleave * ia + bits_transposed_filled);
                     if (bits & (1ULL << ibit))
                         bits_transposed |= mask;
@@ -135,13 +135,13 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
                         bits_transposed &= ~mask;
                 }
 
-            bits >>= interleave * FEC_N;
-            bits_filled -= interleave * FEC_N;
-            bits_transposed_filled += interleave * FEC_N;
+            bits >>= interleave * HAMMING_N;
+            bits_filled -= interleave * HAMMING_N;
+            bits_transposed_filled += interleave * HAMMING_N;
         }
 
         /* if we can enqueue another full byte... */
-        while (bits_filled + 2 * FEC_N <= sizeof(bits) * CHAR_BIT && ibyte < B + 3) {
+        while (bits_filled + 2 * HAMMING_N <= sizeof(bits) * CHAR_BIT && ibyte < B + 3) {
             /* the next byte to send is either the message length, its hash, a data
              byte, or the hash of all the data bytes */
             const unsigned char byte = (0 == ibyte ? B - 1 :
@@ -149,7 +149,7 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
                                         ibyte < B + 2 ? bytes[ibyte - 2] :
                                         ibyte == B + 2 ? hash : 0);
             bits |= (unsigned long long)hamming_one_full_byte(byte) << bits_filled;
-            bits_filled += 2 * FEC_N;
+            bits_filled += 2 * HAMMING_N;
 
             if (ibyte >= 2) hash = (hash ^ byte) * 16777619U;
 
@@ -158,8 +158,8 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
 
         /* if no more bits are coming from upstream and we need to complete a transpose
          group, then just enqueue the difference in zero bits */
-        if (ibyte == B + 3 && bits_filled && bits_transposed_filled < interleave * FEC_N)
-            bits_filled = interleave * FEC_N;
+        if (ibyte == B + 3 && bits_filled && bits_transposed_filled < interleave * HAMMING_N)
+            bits_filled = interleave * HAMMING_N;
     }
 
     free(modulation_advances);
@@ -199,7 +199,7 @@ int main(const int argc, const char * const * const argv) {
 
     const float amplitude = argc > 6 ? strtof(argv[6], NULL) : 32766.0f;
 
-    if (interleave * FEC_N + bits_per_sweep > sizeof(unsigned long long) * CHAR_BIT) {
+    if (interleave * HAMMING_N + bits_per_sweep > sizeof(unsigned long long) * CHAR_BIT) {
         fprintf(stderr, "error: %s: interleave too long\n", __func__);
         exit(EXIT_FAILURE);
     }
