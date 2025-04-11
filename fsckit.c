@@ -139,9 +139,8 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
          sweep, then just enqueue the difference */
             coded_bits_filled = bits_per_sweep;
 
-        while (coded_bits_filled + N <= sizeof(coded_bits) * CHAR_BIT &&
-               data_bits_filled >= K) {
-
+        /* if we have enough data bits to do another FEC block... */
+        while (coded_bits_filled + N <= sizeof(coded_bits) * CHAR_BIT && data_bits_filled >= K) {
             coded_bits |= hamming_interleaved(data_bits, interleave) << coded_bits_filled;
             data_bits >>= K;
             data_bits_filled -= K;
@@ -161,12 +160,11 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
             data_bits_filled += 8;
 
             if (ibyte >= 2) hash = (hash ^ byte) * 16777619U;
-
             ibyte++;
         }
 
-        /* if no more bits are coming from upstream and we need to complete a transpose
-         group, then just enqueue the difference in zero bits */
+        /* if no more data bits and we need to complete an FEC block input, then just
+         enqueue the difference in zero bits */
         if (ibyte == B + 3 && data_bits_filled && coded_bits_filled < K)
             data_bits_filled = K;
     }
