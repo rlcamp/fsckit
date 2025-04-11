@@ -71,11 +71,10 @@ float complex stop_carrier_at_zero(void (* emit_sample_func)(void *, const int16
     return carrier;
 }
 
-float complex fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char buf[restrict static Bmax]),
-                     void * get_bytes_ctx,
-                     void (* emit_sample_func)(void *, const int16_t), void * emit_sample_ctx,
+float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * emit_sample_ctx,
                      const float amplitude, const float fs, const float fc, const float bw,
-                     const unsigned bits_per_sweep, const unsigned interleave, float complex carrier) {
+                     const unsigned bits_per_sweep, const unsigned interleave, float complex carrier,
+                     const size_t B, const unsigned char bytes[restrict static B]) {
     /* number of unique measurable symbols is 2^bits_per_sweep */
     const size_t S = 1U << bits_per_sweep;
 
@@ -102,13 +101,7 @@ float complex fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char b
     /* initial state of carrier */
     const float complex carrier_advance = cexpf(I * 2.0f * (float)M_PI * fc / fs);
 
-    /* loop over lines of text on stdin, or blocks of 256 bytes */
-    char bytes[257];
-
-    while (1) {
-        const size_t B = get_bytes_func(get_bytes_ctx, sizeof(bytes), bytes);
-        if (!B) break;
-
+    {
         /* fnv-1a initial value */
         unsigned hash = 2166136261U;
 
@@ -190,11 +183,6 @@ float complex fsckit(size_t (* get_bytes_func)(void *, const size_t Bmax, char b
 
 #include <stdio.h>
 
-static size_t fgets_bytes(void * ctx, const size_t Bmax, char buf[restrict static Bmax]) {
-    char * ret = fgets(buf, (int)Bmax, ctx);
-    return ret ? strlen(ret) : 0;
-}
-
 static void fwrite_sample(void * ctx, const int16_t sample) {
     fwrite(&sample, sizeof(int16_t), 1, ctx);
 }
@@ -232,7 +220,15 @@ int main(const int argc, const char * const * const argv) {
 
     float complex carrier = 1.0f;
 
-    carrier = fsckit(fgets_bytes, stdin, fwrite_sample, stdout, amplitude, fs, fc, bw, bits_per_sweep, interleave, carrier);
+    /* loop over lines of text on stdin, or blocks of 256 bytes */
+    char bytes[257];
+
+    while (1) {
+        if (!fgets(bytes, sizeof(bytes), stdin)) break;
+        const size_t B = strlen(bytes);
+
+        carrier = fsckit(fwrite_sample, stdout, amplitude, fs, fc, bw, bits_per_sweep, interleave, carrier, B, (void *)bytes);
+    }
 
     carrier = stop_carrier_at_zero(fwrite_sample, stdout, carrier, fs, fc, amplitude);
 
