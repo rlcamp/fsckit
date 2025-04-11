@@ -107,37 +107,37 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
     unsigned long long bits = 0;
     size_t bits_filled = 0;
 
-    unsigned long long bits_transposed = 0;
-    size_t bits_transposed_filled = 0;
+    unsigned long long coded_bits = 0;
+    size_t coded_bits_filled = 0;
 
-    for (size_t ibyte = 0; ibyte < B + 3 || bits_transposed_filled || bits_filled; ) {
-        while (bits_transposed_filled >= bits_per_sweep) {
-            const unsigned symbol = bits_transposed & (S - 1U);
+    for (size_t ibyte = 0; ibyte < B + 3 || coded_bits_filled || bits_filled; ) {
+        while (coded_bits_filled >= bits_per_sweep) {
+            const unsigned symbol = coded_bits & (S - 1U);
             carrier = emit_symbol(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, symbol, L, amplitude);
-            bits_transposed >>= bits_per_sweep;
-            bits_transposed_filled -= bits_per_sweep;
+            coded_bits >>= bits_per_sweep;
+            coded_bits_filled -= bits_per_sweep;
         }
 
-        if (ibyte == B + 3 && bits_transposed_filled && !bits_filled)
+        if (ibyte == B + 3 && coded_bits_filled && !bits_filled)
         /* if no more transposed bits are coming and we have a partially completed
          sweep, then just enqueue the difference */
-            bits_transposed_filled = bits_per_sweep;
+            coded_bits_filled = bits_per_sweep;
 
-        while (bits_transposed_filled + interleave * HAMMING_N <= sizeof(bits_transposed) * CHAR_BIT &&
+        while (coded_bits_filled + interleave * HAMMING_N <= sizeof(coded_bits) * CHAR_BIT &&
                bits_filled >= interleave * HAMMING_N) {
 
             for (size_t ib = 0, ibit = 0; ib < interleave; ib++)
                 for (size_t ia = 0; ia < HAMMING_N; ia++, ibit++) {
-                    const unsigned long long mask = 1ULL << (ib + interleave * ia + bits_transposed_filled);
+                    const unsigned long long mask = 1ULL << (ib + interleave * ia + coded_bits_filled);
                     if (bits & (1ULL << ibit))
-                        bits_transposed |= mask;
+                        coded_bits |= mask;
                     else
-                        bits_transposed &= ~mask;
+                        coded_bits &= ~mask;
                 }
 
             bits >>= interleave * HAMMING_N;
             bits_filled -= interleave * HAMMING_N;
-            bits_transposed_filled += interleave * HAMMING_N;
+            coded_bits_filled += interleave * HAMMING_N;
         }
 
         /* if we can enqueue another full byte... */
@@ -158,7 +158,7 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
 
         /* if no more bits are coming from upstream and we need to complete a transpose
          group, then just enqueue the difference in zero bits */
-        if (ibyte == B + 3 && bits_filled && bits_transposed_filled < interleave * HAMMING_N)
+        if (ibyte == B + 3 && bits_filled && coded_bits_filled < interleave * HAMMING_N)
             bits_filled = interleave * HAMMING_N;
     }
 
