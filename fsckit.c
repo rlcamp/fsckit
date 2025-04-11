@@ -58,6 +58,23 @@ static unsigned char hamming(unsigned char x) {
 #define HAMMING_N 7
 #define HAMMING_K 4
 
+static unsigned long long hamming_interleaved(const unsigned long long data_bits, const size_t interleave) {
+    unsigned long long ret = 0;
+
+    for (size_t ib = 0; ib < interleave; ib++) {
+        const unsigned int bits_now = hamming((data_bits >> (ib * HAMMING_K)) & 0xF);
+
+        for (size_t ia = 0; ia < HAMMING_N; ia++) {
+            const unsigned long long mask = 1ULL << (ib + interleave * ia);
+            if (bits_now & (1ULL << ia))
+                ret |= mask;
+            else
+                ret &= ~mask;
+        }
+    }
+    return ret;
+}
+
 float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * emit_sample_ctx,
                      const float amplitude, const float fs, const float fc, const float bw,
                      const unsigned bits_per_sweep, const unsigned interleave, float complex carrier,
@@ -122,17 +139,7 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
         while (coded_bits_filled + interleave * HAMMING_N <= sizeof(coded_bits) * CHAR_BIT &&
                data_bits_filled >= interleave * HAMMING_K) {
 
-            for (size_t ib = 0; ib < interleave; ib++) {
-                const unsigned int bits_now = hamming((data_bits >> (ib * HAMMING_K)) & 0xF);
-
-                for (size_t ia = 0; ia < HAMMING_N; ia++) {
-                    const unsigned long long mask = 1ULL << (ib + interleave * ia + coded_bits_filled);
-                    if (bits_now & (1ULL << ia))
-                        coded_bits |= mask;
-                    else
-                        coded_bits &= ~mask;
-                }
-            }
+            coded_bits |= hamming_interleaved(data_bits, interleave) << coded_bits_filled;
 
             data_bits >>= interleave * HAMMING_K;
             data_bits_filled -= interleave * HAMMING_K;
