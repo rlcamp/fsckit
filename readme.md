@@ -22,9 +22,11 @@ This modulation falls under the category of "spread spectrum" techniques in that
 
 ### Forward error correction
 
-The current implementation uses a Hamming 7,4 code with a controllable amount of interleaving between it and the chirp layer. Without interleaving, the Hamming layer would not actually add any value vs simply using a larger spreading factor in the chirp layer. The interleaving factor should be matched to the expected channel conditions (that is, the effective time between each of the 7 bits should be greater than the expected duration of an interference burst).
+As somewhat of a placeholder, the current implementation uses a Hamming 7,4 code with a controllable amount of interleaving between it and the chirp layer. Without interleaving, the Hamming layer would not actually add any value vs simply using a larger spreading factor in the chirp layer. The interleaving factor should be matched to the expected channel conditions (that is, the effective time between each of the 7 bits should be greater than the expected duration of an interference burst).
 
 After deinterleaving, the receiver does a dumb simple exhaustive naive maximum-likelihood brute force search for the most likely uncorrupted code word using soft bit decisions as inputs. We can probably do better, but bear in mind this needs to work on a microcontroller with almost no available memory.
+
+The encoder and decoder have both been structured such that this interleaved Hamming code can be replaced by a more sophisticated block code (as long as N is not greater than 56 coded bits, due to an internal implementation detail).
 
 ### Todo
 
