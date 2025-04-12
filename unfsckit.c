@@ -39,7 +39,6 @@ static float circular_argmax_of_complex_vector(float * max_magsquared_p, const s
     const float prev = cmagsquaredf(s[(is_max + S - 1) % S]);
     const float next = cmagsquaredf(s[(is_max + 1) % S]);
 
-    /* actual logf is expensive, use a fast approx that is good enough for the use case */
     const float alpha = logf(prev * one_over_this);
     const float gamma = logf(next * one_over_this);
     const float p = 0.5f * (alpha - gamma) / (alpha + gamma);
@@ -134,16 +133,17 @@ static unsigned gray(unsigned x) {
 
 static float soft_bit_decision_from_fft(const size_t ibit, const size_t S,
                                         const float complex s[restrict static S]) {
-    float power_zero = 0, power_one = 0;
+    /* returns +1.0 if the bit is definitely clear, -1.0 if definitely set, 0 if erasure */
+    float power_if_clr = 0.0f, power_if_set = 0.0f;
     for (size_t is = 0; is < S; is++)
     /* if this bit is set in the gray code of this symbol... */
         if (gray(is) & (1U << ibit))
-            power_one += cmagsquaredf(s[is]);
+            power_if_set += cmagsquaredf(s[is]);
         else
-            power_zero += cmagsquaredf(s[is]);
+            power_if_clr += cmagsquaredf(s[is]);
 
-    const float denominator = power_zero + power_one;
-    return denominator ? (power_zero - power_one) / denominator : 0.0f;
+    const float denominator = power_if_clr + power_if_set;
+    return denominator ? (power_if_clr - power_if_set) / denominator : 0.0f;
 }
 
 static unsigned char hamming(unsigned char x) {
@@ -153,14 +153,17 @@ static unsigned char hamming(unsigned char x) {
 }
 
 static unsigned char soft_decode_hamming_naive(const float soft_bit_history[restrict], const size_t stride) {
-    /* this could be replaced with well anything */
     float best = 0;
     unsigned char is_best = 0;
 
+    /* loop over all code words */
     for (unsigned char is = 0; is < 16; is++) {
         const unsigned char h = hamming(is);
+
+        /* take dot product between observed and hamming code of this code word */
         float acc = 0;
-        for (unsigned char ib = 0, m = 1; ib < 7; ib++, m <<=1) {
+        for (unsigned char ib = 0, m = 1; ib < 7; ib++, m <<= 1) {
+            /* assumes that +1.0 means the bit is clear, -1.0 means the bit is set */
             const float y = soft_bit_history[stride * ib];
             if (h & m) acc -= y;
             else acc += y;
@@ -175,6 +178,7 @@ static unsigned char soft_decode_hamming_naive(const float soft_bit_history[rest
 }
 
 static unsigned long long soft_decode_block_hamming(const float soft_bit_history[restrict], const size_t interleave) {
+    /* TODO: replace interleaved hamming codes with something more intelligent */
     unsigned long long ret = 0;
 
     for (size_t iblock = 0; iblock < interleave; iblock++)
@@ -361,7 +365,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                         /* if it was a downsweep with the expected shift... */
                         if (power_dn_prior > power_up_prior && fabsf(value_dn_prior - value_dn_now - shift / (float)L) < 0.5f) {
-                            dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__, iframe, value_dn_prior, value_dn_now + shift / (float)L);
+                            dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__,
+                                    iframe, value_dn_prior, value_dn_now + shift / (float)L);
                             ih_next_frame -= shift;
 
                             /* final estimate of carrier offset considers last three upsweeps
@@ -370,7 +375,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                         value_dn_now + shift / (float)L +
                                         value_dn_prior) * (1.0f / 5.0f);
 
-                            dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %ld Hz\r\n", __func__, iframe, ih_next_frame, lrintf(residual * bandwidth / S));
+                            dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %ld Hz\r\n",
+                                    __func__, iframe, ih_next_frame, lrintf(residual * bandwidth / S));
 
                             state++;
                         }
@@ -389,8 +395,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     ih_next_frame -= shift;
                     residual -= (float)shift / L;
                 }
-
-//                dprintf(2, "%s: frame %u: data bits, residual now %.3f\r\n", __func__, iframe, residual);
 
                 for (size_t ibit = 0; ibit < bits_per_sweep; ibit++) {
                     soft_bit_history[ih_bit++] = soft_bit_decision_from_fft(ibit, S, fft_output);
