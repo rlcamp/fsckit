@@ -147,6 +147,11 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
             coded_bits_filled += N;
         }
 
+        /* if no more data bits and we need to complete an FEC block input, then just
+         enqueue the difference in zero bits */
+        if (ibyte == B + 3 && data_bits_filled && coded_bits_filled < N)
+            data_bits_filled = K;
+
         /* if we can enqueue another full byte... */
         while (data_bits_filled + 8 <= sizeof(data_bits) * CHAR_BIT && ibyte < B + 3) {
             /* the next byte to send is either the message length, its hash, a data
@@ -162,11 +167,6 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
             if (ibyte >= 2) hash = (hash ^ byte) * 16777619U;
             ibyte++;
         }
-
-        /* if no more data bits and we need to complete an FEC block input, then just
-         enqueue the difference in zero bits */
-        if (ibyte == B + 3 && data_bits_filled && coded_bits_filled < K)
-            data_bits_filled = K;
     }
 
     free(modulation_advances);
