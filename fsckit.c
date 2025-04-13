@@ -38,16 +38,6 @@ static unsigned degray(unsigned x) {
     return x;
 }
 
-static float complex emit_symbol(void (* emit_sample_func)(void *, const int16_t),
-                                 void * emit_sample_ctx,
-                                 float complex carrier, const size_t T,
-                                 const float complex modulation_advances[restrict static T],
-                                 const float complex carrier_advance,
-                                 const unsigned symbol,  const size_t L, const float amplitude) {
-    return emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T,
-                      modulation_advances, carrier_advance, degray(symbol) * L, 0, amplitude);
-}
-
 static unsigned char hamming(unsigned char x) {
     return x | ((((x >> 0U) ^ (x >> 1U) ^ (x >> 2U)) & 0x1) << 4U |
                 (((x >> 1U) ^ (x >> 2U) ^ (x >> 3U)) & 0x1) << 5U |
@@ -129,7 +119,7 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
     for (size_t ibyte = 0; ibyte < B + 3 || coded_bits_filled || data_bits_filled; ) {
         while (coded_bits_filled >= bits_per_sweep) {
             const unsigned symbol = coded_bits & (S - 1U);
-            carrier = emit_symbol(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, symbol, L, amplitude);
+            carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, degray(symbol) * L, 0, amplitude);
             coded_bits >>= bits_per_sweep;
             coded_bits_filled -= bits_per_sweep;
         }
