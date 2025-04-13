@@ -502,6 +502,7 @@ int main(const int argc, const char * const * const argv) {
     const unsigned interleave = argc > 5 ? strtoul(argv[5], NULL, 10) : 6;
 
     assert(interleave * HAMMING_K <= 56);
+    assert(bits_per_sweep > 1);
 
     setvbuf(stdin, NULL, _IONBF, 0);
     setvbuf(stdout, NULL, _IONBF, 0);
