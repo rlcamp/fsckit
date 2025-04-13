@@ -32,7 +32,7 @@ The encoder and decoder have both been structured such that this interleaved Ham
 
 - Pin down the required bandpass filter parameters, there are three knobs here that interact
 
-- Identify and eliminate slow libc calls. The code has a number of remainderf() and lrintf() calls within the hot loop which can be a bottleneck or not, depending on how well they are implemented and optimized for the finite-math-only case within various libc's we care about.
+- Improve robustness against rate error.
 
 - Better forward error correction. We're currently brute-force soft decoding a Hamming 7,4 layer in exponential time. This could be replaced with a Hadamard 8,4 layer which can be soft-decoded for a lot less compute effort
 
