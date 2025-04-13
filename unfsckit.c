@@ -391,13 +391,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                  knob, as there are fewer update opportunities */
                 residual += 0.25f * (value - lrintf(value));
 
-                /* if the residual dechirp alignment error has grown large enough to imply
-                 a time offset of more than one sample, shift the time alignment */
-                const int shift = lrintf(residual * L);
-                if (shift) {
-                    ih_next_frame -= shift;
-                    residual -= (float)shift / L;
-                }
+                /* TODO: possibly update time alignment according to trend in residual */
 
                 for (size_t ibit = 0; ibit < bits_per_sweep; ibit++) {
                     soft_bit_history[ih_bit++] = soft_bit_decision_from_fft(ibit, S, fft_output);
