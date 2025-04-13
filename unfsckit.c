@@ -387,9 +387,12 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 prior_upsweeps[iframe % 4] = value;
             } else {
                 /* KNOB: scaling factor by which our running estimate of the residual error
-                 is nudged by each new bit, assuming it was the correct bit */
+                 is nudged by each new symbol. longer symbols want higher values of this
+                 knob, as there are fewer update opportunities */
                 residual += 0.25f * (value - lrintf(value));
 
+                /* if the residual dechirp alignment error has grown large enough to imply
+                 a time offset of more than one sample, shift the time alignment */
                 const int shift = lrintf(residual * L);
                 if (shift) {
                     ih_next_frame -= shift;
