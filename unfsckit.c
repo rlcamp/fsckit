@@ -152,38 +152,43 @@ static unsigned char hamming(unsigned char x) {
                 (((x >> 0U) ^ (x >> 1U) ^ (x >> 3U)) & 0x1) << 6U);
 }
 
-static unsigned char soft_decode_hamming_naive(const float soft_bit_history[restrict], const size_t stride) {
+static unsigned char soft_decode_hamming_naive(const size_t interleave,
+                                               const float soft_bit_history[restrict 7 * interleave]) {
+    /* perform naive exhaustive ML decoding of 7 soft bits to get 4 hard bits */
     float best = 0;
-    unsigned char is_best = 0;
+    unsigned char iword_best = 0;
 
-    /* loop over all code words */
-    for (unsigned char is = 0; is < 16; is++) {
-        const unsigned char h = hamming(is);
+    /* loop over all 2^K unique length-N code words */
+    for (unsigned char iword = 0; iword < 16; iword++) {
+        const unsigned char h = hamming(iword);
 
-        /* take dot product between observed and hamming code of this code word */
+        /* take dot product between soft bits and the hamming code of this code word */
         float acc = 0;
-        for (unsigned char ib = 0, m = 1; ib < 7; ib++, m <<= 1) {
+        for (unsigned char ibit = 0, mask = 1; ibit < 7; ibit++, mask <<= 1) {
             /* assumes that +1.0 means the bit is clear, -1.0 means the bit is set */
-            const float y = soft_bit_history[stride * ib];
-            if (h & m) acc -= y;
+            const float y = soft_bit_history[interleave * ibit];
+            if (h & mask) acc -= y;
             else acc += y;
         }
 
         if (acc > best) {
             best = acc;
-            is_best = is;
+            iword_best = iword;
         }
     }
     dprintf(2, "%s: best score %.2f\n", __func__, best);
-    return is_best;
+    return iword_best;
 }
 
-static unsigned long long soft_decode_block_hamming(const float soft_bit_history[restrict], const size_t interleave) {
+static unsigned long long soft_decode_block_hamming(const size_t interleave,
+                                                    const float soft_bit_history[restrict 7 * interleave]) {
+    /* this takes a block of 7 * interleave soft bits and returns 4 * interleave hard bit
+     decisions, giving some robustness against burst interference in the chirp layer */
     /* TODO: replace interleaved hamming codes with something more intelligent */
     unsigned long long ret = 0;
 
     for (size_t iblock = 0; iblock < interleave; iblock++)
-        ret |= soft_decode_hamming_naive(soft_bit_history + iblock, interleave) << 4U * iblock;
+        ret |= soft_decode_hamming_naive(interleave, soft_bit_history + iblock) << 4U * iblock;
     return ret;
 }
 
@@ -399,7 +404,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                     /* whenever we have a complete block of interleaved hamming codes... */
                     if (ih_bit == N) {
-                        const unsigned long long bits = soft_decode_block_hamming(soft_bit_history, interleave);
+                        const unsigned long long bits = soft_decode_block_hamming(interleave, soft_bit_history);
 
                         decoded_bits |= bits << decoded_bits_filled;
                         decoded_bits_filled += K;
