@@ -174,6 +174,7 @@ static unsigned char soft_decode_hamming_naive(const float soft_bit_history[rest
             is_best = is;
         }
     }
+    dprintf(2, "%s: best score %.2f\n", __func__, best);
     return is_best;
 }
 
@@ -375,8 +376,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                         value_dn_now + shift / (float)L +
                                         value_dn_prior) * (1.0f / 5.0f);
 
-                            dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %ld Hz\r\n",
-                                    __func__, iframe, ih_next_frame, lrintf(residual * bandwidth / S));
+                            dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %.2f Hz\r\n",
+                                    __func__, iframe, ih_next_frame, (residual * bandwidth / S));
 
                             state++;
                         }
