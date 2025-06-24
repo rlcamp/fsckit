@@ -52,7 +52,7 @@ static float complex cosisinf(const float x) {
 
 static void dechirp(const size_t S, const size_t L, const size_t H,
                     float complex fft_input[restrict static S],
-                    const float complex history[restrict static H], const unsigned ih,
+                    const float complex history[restrict static H], const size_t ih,
                     const float complex advances[restrict static S * L], const char down,
                     const float residual) {
     /* extract critically sampled values from history, and multiply by conjugate of chirp */
@@ -202,6 +202,7 @@ static unsigned long long soft_decode_block_hamming(const size_t interleave,
 
 void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t *, void *), void * get_ctx,
               void (* put_bytes_func)(const unsigned char *, const size_t, void *), void * put_ctx,
+              void (* preamble_detected_func)(const size_t, void *), void * preamble_detected_ctx,
               const float sample_rate, const float f_carrier, const float bandwidth,
               const unsigned bits_per_sweep, const unsigned interleave) {
     const size_t S = 1U << bits_per_sweep; /* number of unique measurable symbols */
@@ -346,7 +347,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     dprintf(2, "%s: frame %u: oldest three upsweeps agree %.3f\r\n", __func__, iframe, mean_of_oldest_upsweeps);
 
                     float power_dn = 0;
-                    dechirp(S, L, H, fft_input, basebanded_ring, ih - S * L, advances, 1, 0);
+                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 1, 0);
                     fft_evaluate_forward(fft_output, fft_input, plan);
                     const float value_dn_now = circular_argmax_of_complex_vector(&power_dn, S, fft_output);
                     if (power_dn > power) {
@@ -383,6 +384,10 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                             dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %.2f Hz\r\n",
                                     __func__, iframe, (unsigned)isample_decimated_next_frame, (residual * bandwidth / S));
+
+                            if (preamble_detected_func)
+                                /* estimate the absolute time of the start of the first chirp, in units of 1/bandwidth */
+                                preamble_detected_func((isample_decimated_next_frame - 7 * S * L + L / 2) / L - 1, preamble_detected_ctx);
 
                             state++;
                         }
@@ -488,6 +493,11 @@ static void put_bytes_to_stdout(const unsigned char * bytes, const size_t B, voi
     last_byte = bytes[B - 1];
 }
 
+static void preamble_detected(const size_t it, void * ctx) {
+    const float bandwidth = *(float *)ctx;
+    dprintf(2, "%s: assumed start time %.3f s into timeseries\r\n", __func__, it / bandwidth);
+}
+
 #include <unistd.h>
 #include <assert.h>
 
@@ -510,6 +520,7 @@ int main(const int argc, const char * const * const argv) {
     int16_t buf[32];
     unfsckit(get_samples_from_stdin, buf,
              put_bytes_to_stdout, NULL,
+             preamble_detected, &(float) { bandwidth },
              sample_rate, f_carrier, bandwidth, bits_per_sweep, interleave);
 
     if (last_byte != -1 && last_byte != '\n' && isatty(STDOUT_FILENO))
