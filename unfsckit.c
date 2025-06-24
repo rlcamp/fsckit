@@ -259,7 +259,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
     /* writer and reader cursors for input ring buffer. the reader shifts its own cursor
      around during preamble detection to align with symbol frames */
-    unsigned ih = 0, ih_next_frame = S * L;
+    size_t isample_decimated = 0, isample_decimated_next_frame = S * L;
 
     /* after preamble detection, this will hold a residual (circular) shift, in units
      of bins, that should be applied to the fft argmax to get the encoded value */
@@ -304,14 +304,14 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             input_samples_since_filtered_sample -= input_samples_per_filtered_sample;
 
             /* store the basebanded filtered decimated samples in a ring buffer */
-            basebanded_ring[(ih++) % H] = filtered;
+            basebanded_ring[(isample_decimated++) % H] = filtered;
 
             /* wait for the buffer to be aligned with the next expected frame */
-            if (ih != ih_next_frame) continue;
-            ih_next_frame += S * L;
+            if (isample_decimated != isample_decimated_next_frame) continue;
+            isample_decimated_next_frame += S * L;
 
             /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
-            dechirp(S, L, H, fft_input, basebanded_ring, ih - S * L, advances, 0, residual);
+            dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 0, residual);
 
             /* do an fft of the dechirped symbol frame */
             fft_evaluate_forward(fft_output, fft_input, plan);
@@ -361,11 +361,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                         /* consider the prior frame as both an upsweep and downsweep */
                         float power_up_prior = 0, power_dn_prior = 0;
-                        dechirp(S, L, H, fft_input, basebanded_ring, ih - 2 * S * L - shift, advances, 0, residual);
+                        dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, residual);
                         fft_evaluate_forward(fft_output, fft_input, plan);
                         circular_argmax_of_complex_vector(&power_up_prior, S, fft_output);
 
-                        dechirp(S, L, H, fft_input, basebanded_ring, ih - 2 * S * L - shift, advances, 1, residual);
+                        dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 1, residual);
                         fft_evaluate_forward(fft_output, fft_input, plan);
                         const float value_dn_prior = circular_argmax_of_complex_vector(&power_dn_prior, S, fft_output) - residual;
 
@@ -373,7 +373,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         if (power_dn_prior > power_up_prior && fabsf(value_dn_prior - value_dn_now - shift / (float)L) < 0.5f) {
                             dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__,
                                     iframe, value_dn_prior, value_dn_now + shift / (float)L);
-                            ih_next_frame -= shift;
+                            isample_decimated_next_frame -= shift;
 
                             /* final estimate of carrier offset considers last three upsweeps
                              and both downsweeps equally */
@@ -382,7 +382,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                         value_dn_prior) * (1.0f / 5.0f);
 
                             dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %.2f Hz\r\n",
-                                    __func__, iframe, ih_next_frame, (residual * bandwidth / S));
+                                    __func__, iframe, (unsigned)isample_decimated_next_frame, (residual * bandwidth / S));
 
                             state++;
                         }
