@@ -201,7 +201,7 @@ static unsigned long long soft_decode_block_hamming(const size_t interleave,
 #define BIQUAD_STAGES 2
 
 void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t *, void *), void * get_ctx,
-              void (* packet_success_function)(const size_t, const unsigned char *, void *), void * put_ctx,
+              void (* packet_success_function)(const size_t, const unsigned char *, const size_t, void *), void * put_ctx,
               void (* preamble_detected_func)(const size_t, void *), void * preamble_detected_ctx,
               const float sample_rate, const float f_carrier, const float bandwidth,
               const unsigned bits_per_sweep, const unsigned interleave) {
@@ -261,6 +261,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     /* writer and reader cursors for input ring buffer. the reader shifts its own cursor
      around during preamble detection to align with symbol frames */
     size_t isample_decimated = 0, isample_decimated_next_frame = S * L;
+
+    /* for estimating the absolute timing of things to pass downstream */
+    size_t isample_decimated_preamble_start = 0;
 
     /* after preamble detection, this will hold a residual (circular) shift, in units
      of bins, that should be applied to the fft argmax to get the encoded value */
@@ -385,9 +388,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                             dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %.2f Hz\r\n",
                                     __func__, iframe, (unsigned)isample_decimated_next_frame, (residual * bandwidth / S));
 
+                            isample_decimated_preamble_start = (isample_decimated_next_frame - 7 * S * L + L / 2) / L - 1;
+
                             if (preamble_detected_func)
                                 /* estimate the absolute time of the start of the first chirp, in units of 1/bandwidth */
-                                preamble_detected_func((isample_decimated_next_frame - 7 * S * L + L / 2) / L - 1, preamble_detected_ctx);
+                                preamble_detected_func(isample_decimated_preamble_start, preamble_detected_ctx);
 
                             state++;
                         }
@@ -450,7 +455,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                         byte, hash_low_bits, byte == hash_low_bits ? "pass" : "fail");
 
                                 if (byte == hash_low_bits)
-                                    packet_success_function(bytes_expected, bytes, put_ctx);
+                                    packet_success_function(bytes_expected, bytes, isample_decimated_preamble_start, put_ctx);
 
                                 /* reset and wait for next packet */
                                 state = 0;
@@ -487,8 +492,9 @@ static const int16_t * get_samples_from_stdin(const int16_t ** end_p, size_t * s
 
 static int last_byte = -1;
 
-static void write_payload_to_stdout(const size_t B, const unsigned char * bytes, void * ctx) {
+static void write_payload_to_stdout(const size_t B, const unsigned char * bytes, const size_t it, void * ctx) {
     (void)ctx;
+    (void)it;
     fwrite(bytes, 1, B, stdout);
     last_byte = bytes[B - 1];
 }
