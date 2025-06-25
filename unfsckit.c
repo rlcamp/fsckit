@@ -201,7 +201,7 @@ static unsigned long long soft_decode_block_hamming(const size_t interleave,
 #define BIQUAD_STAGES 2
 
 void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t *, void *), void * get_ctx,
-              void (* put_bytes_func)(const unsigned char *, const size_t, void *), void * put_ctx,
+              void (* packet_success_function)(const size_t, const unsigned char *, void *), void * put_ctx,
               void (* preamble_detected_func)(const size_t, void *), void * preamble_detected_ctx,
               const float sample_rate, const float f_carrier, const float bandwidth,
               const unsigned bits_per_sweep, const unsigned interleave) {
@@ -450,7 +450,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                         byte, hash_low_bits, byte == hash_low_bits ? "pass" : "fail");
 
                                 if (byte == hash_low_bits)
-                                    put_bytes_func(bytes, bytes_expected, put_ctx);
+                                    packet_success_function(bytes_expected, bytes, put_ctx);
 
                                 /* reset and wait for next packet */
                                 state = 0;
@@ -487,7 +487,7 @@ static const int16_t * get_samples_from_stdin(const int16_t ** end_p, size_t * s
 
 static int last_byte = -1;
 
-static void put_bytes_to_stdout(const unsigned char * bytes, const size_t B, void * ctx) {
+static void write_payload_to_stdout(const size_t B, const unsigned char * bytes, void * ctx) {
     (void)ctx;
     fwrite(bytes, 1, B, stdout);
     last_byte = bytes[B - 1];
@@ -519,7 +519,7 @@ int main(const int argc, const char * const * const argv) {
 
     int16_t buf[32];
     unfsckit(get_samples_from_stdin, buf,
-             put_bytes_to_stdout, NULL,
+             write_payload_to_stdout, NULL,
              preamble_detected, &(float) { bandwidth },
              sample_rate, f_carrier, bandwidth, bits_per_sweep, interleave);
 
