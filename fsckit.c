@@ -158,7 +158,10 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
                                         ibyte < B + 2 ? ((unsigned char *)iov->iov_base)[iov_byte++] :
                                         ibyte == B + 2 ? hash : 0);
 
-            if (iov_byte == iov->iov_len) iov++;
+            if (iov_byte == iov->iov_len) {
+                iov++;
+                iov_byte = 0;
+            }
 
             data_bits |= (unsigned long long)byte << data_bits_filled;
             data_bits_filled += 8;
