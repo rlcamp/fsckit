@@ -68,7 +68,7 @@ static unsigned long long hamming_interleaved(const unsigned long long data_bits
 float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * emit_sample_ctx,
                      const float amplitude, const float fs, const float fc, const float bw,
                      const unsigned bits_per_sweep, const unsigned interleave, float complex carrier,
-                     const size_t B, const unsigned char bytes[restrict static B]) {
+                     const size_t V, const struct iovec iovs[restrict static V]) {
     /* number of unique measurable symbols is 2^bits_per_sweep */
     const size_t S = 1U << bits_per_sweep;
 
@@ -108,6 +108,10 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
     carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, 0, 1, amplitude);
     carrier = emit_sweep(emit_sample_func, emit_sample_ctx, carrier, T, modulation_advances, carrier_advance, 0, 1, amplitude);
 
+    size_t B = 0;
+    for (size_t iv = 0; iv < V; iv++)
+        B += iovs[iv].iov_len;
+
     const unsigned char len_hash = (2166136261U ^ (unsigned char)(B - 1)) * 16777619U;
 
     unsigned long long data_bits = 0;
@@ -115,6 +119,9 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
 
     unsigned long long coded_bits = 0;
     size_t coded_bits_filled = 0;
+
+    const struct iovec * iov = iovs;
+    size_t iov_byte = 0;
 
     for (size_t ibyte = 0; ibyte < B + 3 || coded_bits_filled || data_bits_filled; ) {
         while (coded_bits_filled >= bits_per_sweep) {
@@ -148,8 +155,10 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
              byte, or the hash of all the data bytes */
             const unsigned char byte = (0 == ibyte ? B - 1 :
                                         1 == ibyte ? len_hash :
-                                        ibyte < B + 2 ? bytes[ibyte - 2] :
+                                        ibyte < B + 2 ? ((unsigned char *)iov->iov_base)[iov_byte++] :
                                         ibyte == B + 2 ? hash : 0);
+
+            if (iov_byte == iov->iov_len) iov++;
 
             data_bits |= (unsigned long long)byte << data_bits_filled;
             data_bits_filled += 8;
@@ -222,7 +231,8 @@ int main(const int argc, const char * const * const argv) {
         if (!fgets(bytes, sizeof(bytes), stdin)) break;
         const size_t B = strlen(bytes);
 
-        carrier = fsckit(fwrite_sample, stdout, amplitude, fs, fc, bw, bits_per_sweep, interleave, carrier, B, (void *)bytes);
+        carrier = fsckit(fwrite_sample, stdout, amplitude, fs, fc, bw, bits_per_sweep, interleave, carrier,
+                         1, &(struct iovec) { .iov_base = bytes, .iov_len = B });
     }
 
     /* emit some quiet samples to flush the decoder if being piped directly into it */
