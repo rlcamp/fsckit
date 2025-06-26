@@ -376,7 +376,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         /* if it was a downsweep with the expected shift... */
                         if (power_dn_prior > power_up_prior && fabsf(value_dn_prior - value_dn_now - shift_unquantized / (float)L) < 0.5f) {
                             dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__,
-                                    iframe, value_dn_prior, value_dn_now + shift_unquantized / (float)L);
+                                    iframe, value_dn_now + shift_unquantized / (float)L, value_dn_prior);
                             isample_decimated_next_frame -= shift;
 
                             /* final estimate of carrier offset considers last three upsweeps
