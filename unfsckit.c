@@ -360,8 +360,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         const int shift = lrintf(shift_unquantized);
 
                         /* best guess of residual so far, not yet counting first downsweep */
-                        residual = (3.0f * (mean_of_oldest_upsweeps - shift / (float)L) +
-                                    value_dn_now + shift / (float)L) * (1.0f / 4.0f);
+                        residual = (3.0f * (mean_of_oldest_upsweeps - shift_unquantized / (float)L) +
+                                    value_dn_now + shift_unquantized / (float)L) * (1.0f / 4.0f);
 
                         /* consider the prior frame as both an upsweep and downsweep */
                         float power_up_prior = 0, power_dn_prior = 0;
@@ -374,15 +374,15 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         const float value_dn_prior = circular_argmax_of_complex_vector(&power_dn_prior, S, fft_output) - residual;
 
                         /* if it was a downsweep with the expected shift... */
-                        if (power_dn_prior > power_up_prior && fabsf(value_dn_prior - value_dn_now - shift / (float)L) < 0.5f) {
+                        if (power_dn_prior > power_up_prior && fabsf(value_dn_prior - value_dn_now - shift_unquantized / (float)L) < 0.5f) {
                             dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__,
-                                    iframe, value_dn_prior, value_dn_now + shift / (float)L);
+                                    iframe, value_dn_prior, value_dn_now + shift_unquantized / (float)L);
                             isample_decimated_next_frame -= shift;
 
                             /* final estimate of carrier offset considers last three upsweeps
                              and both downsweeps equally */
-                            residual = (3.0f * (mean_of_oldest_upsweeps - shift / (float)L) +
-                                        value_dn_now + shift / (float)L +
+                            residual = (3.0f * (mean_of_oldest_upsweeps - shift_unquantized / (float)L) +
+                                        value_dn_now + shift_unquantized / (float)L +
                                         value_dn_prior) * (1.0f / 5.0f);
 
                             dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %.2f Hz\r\n",
