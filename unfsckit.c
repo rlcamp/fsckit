@@ -32,7 +32,7 @@ static float circular_argmax_of_complex_vector(float * max_magsquared_p, const s
     }
 
     if (max_magsquared_p) *max_magsquared_p = max;
-    if (!max) return FLT_MAX;
+    if (max <= 1.0f / FLT_MAX) return FLT_MAX;
 
     /* TODO: use three-point exact dft expr instead of quadratic fit to log of magsquared */
     const float one_over_this = 1.0f / max;
