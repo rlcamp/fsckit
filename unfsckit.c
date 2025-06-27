@@ -398,6 +398,13 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 }
 
                 prior_upsweeps[iframe % 4] = value;
+
+                /* shift the time alignment to agree with the mean of what will be the
+                 oldest two chirps on the next evaluation */
+                const int shift = lrintf(L * 0.5f * (prior_upsweeps[(iframe + 1) % 4] + prior_upsweeps[(iframe + 2) % 4]));
+                isample_decimated_next_frame -= shift;
+                for (size_t ifour = 0; ifour < 4; ifour++)
+                    prior_upsweeps[ifour] -= shift / (float)L;
             } else {
                 /* KNOB: scaling factor by which our running estimate of the residual error
                  is nudged by each new symbol. longer symbols want higher values of this
