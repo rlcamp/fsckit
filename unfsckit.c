@@ -379,11 +379,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                     iframe, value_dn_now + shift_unquantized / (float)L, value_dn_prior);
                             isample_decimated_next_frame -= shift;
 
-                            /* final estimate of carrier offset considers last three upsweeps
-                             and both downsweeps equally */
-                            residual = (3.0f * (mean_of_oldest_upsweeps - shift_unquantized / (float)L) +
-                                        value_dn_now + shift_unquantized / (float)L +
-                                        value_dn_prior) * (1.0f / 5.0f);
+                            /* note: we do not refine the residual using the first of the
+                             two downchirps as it is contaminated by filter ringing */
 
                             dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %.2f Hz\r\n",
                                     __func__, iframe, (unsigned)isample_decimated_next_frame, (residual * bandwidth / S));
