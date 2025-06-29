@@ -19,8 +19,12 @@ static float complex renormalize(const float complex x) {
     return x * (3.0f - cmagsquaredf(x)) * 0.5f;
 }
 
-static float circular_argmax_of_complex_vector(float * max_magsquared_p, const size_t S,
-                                               const float complex s[restrict static S]) {
+struct argmax {
+    float value;
+    float power;
+};
+
+static struct argmax circular_argmax_of_complex_vector(const size_t S, const float complex s[restrict static S]) {
     float max = 0;
     size_t is_max = 0;
     for (size_t is = 0; is < S; is++) {
@@ -31,8 +35,8 @@ static float circular_argmax_of_complex_vector(float * max_magsquared_p, const s
         }
     }
 
-    if (max_magsquared_p) *max_magsquared_p = max;
-    if (max <= 1.0f / FLT_MAX) return FLT_MAX;
+    if (max <= 1.0f / FLT_MAX)
+        return (struct argmax) { .value = FLT_MAX };
 
     /* TODO: use three-point exact dft expr instead of quadratic fit to log of magsquared */
     const float one_over_this = 1.0f / max;
@@ -43,7 +47,10 @@ static float circular_argmax_of_complex_vector(float * max_magsquared_p, const s
     const float gamma = logf(next * one_over_this);
     const float p = 0.5f * (alpha - gamma) / (alpha + gamma);
 
-    return (is_max + p) - (is_max + p >= 0.5f * S ? S : 0);
+    return (struct argmax) {
+        .value = (is_max + p) - (is_max + p >= 0.5f * S ? S : 0),
+        .power = max
+    };
 }
 
 static float complex cosisinf(const float x) {
@@ -321,10 +328,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             fft_evaluate_forward(fft_output, fft_input, plan);
 
             /* find index (incl estimating the fractional part) of the loudest fft bin */
-            float power = 0;
-            const float value = circular_argmax_of_complex_vector(&power, S, fft_output);
+            const struct argmax argmax = circular_argmax_of_complex_vector(S, fft_output);
 
-            if (!power) continue;
+            if (!argmax.power) continue;
 
             if (0 == state) {
                 /* resetting everything */
@@ -349,34 +355,33 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     fabsf(prior_upsweeps[(iframe + 2) % 4] - mean_of_oldest_upsweeps) < 0.5f) {
                     dprintf(2, "%s: frame %u: oldest three upsweeps agree %.3f\r\n", __func__, iframe, mean_of_oldest_upsweeps);
 
-                    float power_dn = 0;
                     dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 1, 0);
                     fft_evaluate_forward(fft_output, fft_input, plan);
-                    const float value_dn_now = circular_argmax_of_complex_vector(&power_dn, S, fft_output);
-                    if (power_dn > power) {
+                    const struct argmax argmax_dn = circular_argmax_of_complex_vector(S, fft_output);
+                    if (argmax_dn.power > argmax.power) {
                         /* got a downsweep, should be able to unambiguously resolve time and
                          frequency shift now, as long as |frequency shift| < bw/4 */
-                        const float shift_unquantized = L * (mean_of_oldest_upsweeps - value_dn_now) * 0.5f;
+                        const float shift_unquantized = L * (mean_of_oldest_upsweeps - argmax_dn.value) * 0.5f;
                         const int shift = lrintf(shift_unquantized);
 
                         /* best guess of residual so far, not yet counting first downsweep */
                         residual = (3.0f * (mean_of_oldest_upsweeps - shift_unquantized / (float)L) +
-                                    value_dn_now + shift_unquantized / (float)L) * (1.0f / 4.0f);
+                                    argmax_dn.value + shift_unquantized / (float)L) * (1.0f / 4.0f);
 
                         /* consider the prior frame as both an upsweep and downsweep */
-                        float power_up_prior = 0, power_dn_prior = 0;
                         dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, residual);
                         fft_evaluate_forward(fft_output, fft_input, plan);
-                        circular_argmax_of_complex_vector(&power_up_prior, S, fft_output);
+                        const struct argmax argmax_up_prior = circular_argmax_of_complex_vector(S, fft_output);
 
                         dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 1, residual);
                         fft_evaluate_forward(fft_output, fft_input, plan);
-                        const float value_dn_prior = circular_argmax_of_complex_vector(&power_dn_prior, S, fft_output) - residual;
+                        const struct argmax argmax_dn_prior = circular_argmax_of_complex_vector(S, fft_output);
 
                         /* if it was a downsweep with the expected shift... */
-                        if (power_dn_prior > power_up_prior && fabsf(value_dn_prior - value_dn_now - shift_unquantized / (float)L) < 0.5f) {
+                        if (argmax_dn_prior.power > argmax_up_prior.power &&
+                            fabsf(argmax_dn_prior.value - residual - argmax_dn.value - shift_unquantized / (float)L) < 0.5f) {
                             dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__,
-                                    iframe, value_dn_now + shift_unquantized / (float)L, value_dn_prior);
+                                    iframe, argmax_dn.value + shift_unquantized / (float)L, argmax_dn_prior.value - residual);
                             isample_decimated_next_frame -= shift;
 
                             /* note: we do not refine the residual using the first of the
@@ -397,12 +402,12 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     }
                 }
 
-                prior_upsweeps[iframe % 4] = value;
+                prior_upsweeps[iframe % 4] = argmax.value;
             } else {
                 /* KNOB: scaling factor by which our running estimate of the residual error
                  is nudged by each new symbol. longer symbols want higher values of this
                  knob, as there are fewer update opportunities */
-                residual += 0.25f * (value - lrintf(value));
+                residual += 0.25f * (argmax.value - lrintf(argmax.value));
 
                 /* TODO: possibly update time alignment according to trend in residual */
 
