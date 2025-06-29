@@ -355,18 +355,23 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     fabsf(prior_upsweeps[(iframe + 2) % 4] - mean_of_oldest_upsweeps) < 0.5f) {
                     dprintf(2, "%s: frame %u: oldest three upsweeps agree %.3f\r\n", __func__, iframe, mean_of_oldest_upsweeps);
 
-                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 1, 0);
+                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L - S * L / 2, advances, 0, -0.5f * S);
                     fft_evaluate_forward(fft_output, fft_input, plan);
-                    const struct argmax argmax_dn = circular_argmax_of_complex_vector(S, fft_output);
-                    if (argmax_dn.power > argmax.power) {
+                    const struct argmax argmax_up_test = circular_argmax_of_complex_vector(S, fft_output);
+
+                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L - S * L / 2, advances, 1, -0.5f * S);
+                    fft_evaluate_forward(fft_output, fft_input, plan);
+                    const struct argmax argmax_dn_test = circular_argmax_of_complex_vector(S, fft_output);
+
+                    if (argmax_dn_test.power > argmax_up_test.power) {
                         /* got a downsweep, should be able to unambiguously resolve time and
                          frequency shift now, as long as |frequency shift| < bw/4 */
-                        const float shift_unquantized = L * (mean_of_oldest_upsweeps - argmax_dn.value) * 0.5f;
+                        const float shift_unquantized = L * (mean_of_oldest_upsweeps - argmax_dn_test.value) * 0.5f;
                         const int shift = lrintf(shift_unquantized);
 
                         /* best guess of residual so far, not yet counting first downsweep */
                         residual = (3.0f * (mean_of_oldest_upsweeps - shift_unquantized / (float)L) +
-                                    argmax_dn.value + shift_unquantized / (float)L) * (1.0f / 4.0f);
+                                    argmax_dn_test.value + shift_unquantized / (float)L) * (1.0f / 4.0f);
 
                         /* consider the prior frame as both an upsweep and downsweep */
                         dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, residual);
@@ -379,9 +384,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                         /* if it was a downsweep with the expected shift... */
                         if (argmax_dn_prior.power > argmax_up_prior.power &&
-                            fabsf(argmax_dn_prior.value - residual - argmax_dn.value - shift_unquantized / (float)L) < 0.5f) {
+                            fabsf(argmax_dn_prior.value - residual - argmax_dn_test.value - shift_unquantized / (float)L) < 0.5f) {
                             dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__,
-                                    iframe, argmax_dn.value + shift_unquantized / (float)L, argmax_dn_prior.value - residual);
+                                    iframe, argmax_dn_test.value + shift_unquantized / (float)L, argmax_dn_prior.value - residual);
                             isample_decimated_next_frame -= shift;
 
                             /* note: we do not refine the residual using the first of the
