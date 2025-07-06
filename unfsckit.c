@@ -378,16 +378,16 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         /* time offset is wrapped so that if it is close to the ambiguous
                          +/- 0.5 case it will always prefer one of them, catching the other
                          on the next frame */
-                        const float time_error = remainderf(0.5f * (mean_of_middle_upsweeps - dn_test_wrapped) - 0.25f * S, S) + 0.25f * S;
-                        freq_offset = remainderf(mean_of_middle_upsweeps - time_error, S);
+                        const float time_offset = remainderf(0.5f * (mean_of_middle_upsweeps - dn_test_wrapped) - 0.25f * S, S) + 0.25f * S;
+                        freq_offset = remainderf(mean_of_middle_upsweeps - time_offset, S);
 
-                        const float shift_unquantized = L * time_error;
+                        const float shift_unquantized = L * time_offset;
                         const int shift = lrintf(shift_unquantized);
 
                         /* TODO: freq_offset should be corrected for time residual error */
 
                         dprintf(2, "%s: time offset %.3f bins (%.3f samples), freq offset %.3f bins (%.3f Hz)\n", __func__,
-                                time_error, time_error * L, freq_offset, freq_offset * bandwidth / S);
+                                time_offset, time_offset * L, freq_offset, freq_offset * bandwidth / S);
 
                         /* consider the prior frame as both an upsweep and downsweep */
                         dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, freq_offset);
