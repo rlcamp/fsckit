@@ -48,7 +48,7 @@ static struct argmax circular_argmax_of_complex_vector(const size_t S, const flo
     const float p = 0.5f * (alpha - gamma) / (alpha + gamma);
 
     return (struct argmax) {
-        .value = (is_max + p) - (is_max + p >= 0.5f * S ? S : 0),
+        .value = remainderf(is_max + p, S),
         .power = max
     };
 }
@@ -345,15 +345,19 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
             /* if listening for preamble... */
             if (1 == state) {
-                const float mean_of_oldest_upsweeps = (prior_upsweeps[(iframe + 0) % 4] +
-                                                       prior_upsweeps[(iframe + 1) % 4] +
-                                                       prior_upsweeps[(iframe + 2) % 4]) * (1.0f / 3.0f);
+                const float ref = prior_upsweeps[(iframe + 2) % 4];
+                const float mean_of_middle_upsweeps = (remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref +
+                                                       remainderf(prior_upsweeps[(iframe + 2) % 4] - ref, S) + ref) * 0.5f;
 
                 if (iframe - iframe_at_last_reset >= 5 &&
-                    fabsf(prior_upsweeps[(iframe + 0) % 4] - mean_of_oldest_upsweeps) < 0.5f &&
-                    fabsf(prior_upsweeps[(iframe + 1) % 4] - mean_of_oldest_upsweeps) < 0.5f &&
-                    fabsf(prior_upsweeps[(iframe + 2) % 4] - mean_of_oldest_upsweeps) < 0.5f) {
-                    dprintf(2, "%s: frame %u: oldest three upsweeps agree %.3f\r\n", __func__, iframe, mean_of_oldest_upsweeps);
+                    fabsf(remainderf(prior_upsweeps[(iframe + 0) % 4] - ref, S) + ref - mean_of_middle_upsweeps) < 1.0f &&
+                    fabsf(remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref - mean_of_middle_upsweeps) < 0.5f &&
+                    fabsf(remainderf(prior_upsweeps[(iframe + 2) % 4] - ref, S) + ref - mean_of_middle_upsweeps) < 0.5f) {
+                    dprintf(2, "%s: frame %u: oldest three upsweeps agree %g %g %g -> %.3f\r\n", __func__, iframe,
+                            remainderf(prior_upsweeps[(iframe + 0) % 4] - ref, S) + ref,
+                            remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref,
+                            remainderf(prior_upsweeps[(iframe + 2) % 4] - ref, S) + ref,
+                            mean_of_middle_upsweeps);
 
                     dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L - S * L / 2, advances, 0, -0.5f * S);
                     fft_evaluate_forward(fft_output, fft_input, plan);
@@ -363,15 +367,31 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     fft_evaluate_forward(fft_output, fft_input, plan);
                     const struct argmax argmax_dn_test = circular_argmax_of_complex_vector(S, fft_output);
 
+                    dprintf(2, "%s(%d): %g, %g; %g, %g\n", __func__, __LINE__,
+                            10.0f * log10f(argmax_up_test.power), argmax_up_test.value,
+                            10.0f * log10f(argmax_dn_test.power), argmax_dn_test.value);
+
                     if (argmax_dn_test.power > argmax_up_test.power) {
+                        dprintf(2, "%s: frame %u, decimated sample %u, oldest sample %u, downsweep detected\n", __func__, iframe, (unsigned)isample_decimated, (unsigned)(isample_decimated - H));
+
                         /* got a downsweep, should be able to unambiguously resolve time and
                          frequency shift now, as long as |frequency shift| < bw/4 */
-                        const float shift_unquantized = L * (mean_of_oldest_upsweeps - argmax_dn_test.value) * 0.5f;
+                        const float dn_test_wrapped = -(remainderf(-argmax_dn_test.value - mean_of_middle_upsweeps, S) + mean_of_middle_upsweeps);
+
+                        /* these are both in units of critical samples or frequency bins */
+                        /* time offset is wrapped so that if it is close to the ambiguous
+                         +/- 0.5 case it will always prefer one of them, catching the other
+                         on the next frame */
+                        const float time_error = remainderf(0.5f * (mean_of_middle_upsweeps - dn_test_wrapped) - 0.25f * S, S) + 0.25f * S;
+                        const float freq_error = remainderf(mean_of_middle_upsweeps - time_error, S);
+
+                        const float shift_unquantized = L * time_error;
                         const int shift = lrintf(shift_unquantized);
 
-                        /* best guess of residual so far, not yet counting first downsweep */
-                        residual = (3.0f * (mean_of_oldest_upsweeps - shift_unquantized / (float)L) +
-                                    argmax_dn_test.value + shift_unquantized / (float)L) * (1.0f / 4.0f);
+                        /* TODO: this should be corrected for time residual error */
+                        residual = freq_error;
+
+                        dprintf(2, "%s: time error %g, freq error %g, residual %g\n", __func__, time_error, freq_error, residual);
 
                         /* consider the prior frame as both an upsweep and downsweep */
                         dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, residual);
