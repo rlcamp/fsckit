@@ -367,10 +367,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     fft_evaluate_forward(fft_output, fft_input, plan);
                     const struct argmax argmax_dn_test = circular_argmax_of_complex_vector(S, fft_output);
 
-                    dprintf(2, "%s(%d): %g, %g; %g, %g\n", __func__, __LINE__,
-                            10.0f * log10f(argmax_up_test.power), argmax_up_test.value,
-                            10.0f * log10f(argmax_dn_test.power), argmax_dn_test.value);
-
                     if (argmax_dn_test.power > argmax_up_test.power) {
                         dprintf(2, "%s: frame %u, decimated sample %u, oldest sample %u, downsweep detected\n", __func__, iframe, (unsigned)isample_decimated, (unsigned)(isample_decimated - H));
 
@@ -390,7 +386,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                         /* TODO: freq_offset should be corrected for time residual error */
 
-                        dprintf(2, "%s: time error %g, freq offset %g\n", __func__, time_error, freq_offset);
+                        dprintf(2, "%s: time offset %.3f bins (%.3f samples), freq offset %.3f bins (%.3f Hz)\n", __func__,
+                                time_error, time_error * L, freq_offset, freq_offset * bandwidth / S);
 
                         /* consider the prior frame as both an upsweep and downsweep */
                         dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, freq_offset);
