@@ -393,7 +393,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                              two downchirps as it is contaminated by filter ringing */
 
                             dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %.2f Hz\r\n",
-                                    __func__, iframe, (unsigned)isample_decimated_next_frame, (residual * bandwidth / S));
+                                    __func__, iframe, (unsigned)(isample_decimated_next_frame - S * L), (residual * bandwidth / S));
 
                             isample_decimated_preamble_start = (isample_decimated_next_frame - 7 * S * L + L / 2) / L - 1;
 
