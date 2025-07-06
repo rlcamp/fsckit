@@ -61,12 +61,12 @@ static void dechirp(const size_t S, const size_t L, const size_t H,
                     float complex fft_input[restrict static S],
                     const float complex history[restrict static H], const size_t ih,
                     const float complex advances[restrict static S * L], const char down,
-                    const float residual) {
+                    const float freq_offset) {
     /* extract critically sampled values from history, and multiply by conjugate of chirp */
     float complex carrier = 1.0f;
 
     /* TODO: optimize this */
-    const float complex extra = cosisinf(2.0f * (float)M_PI * residual / S);
+    const float complex extra = cosisinf(2.0f * (float)M_PI * freq_offset / S);
 
     for (size_t is = 0; is < S; is++) {
         /* TODO: document this indexing math wow */
@@ -274,7 +274,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
     /* after preamble detection, this will hold a residual (circular) shift, in units
      of bins, that should be applied to the fft argmax to get the encoded value */
-    float residual = 0;
+    float freq_offset = 0;
 
     /* counters needed by data states */
     unsigned bytes_expected = 0, ibyte = 0;
@@ -322,7 +322,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             isample_decimated_next_frame += S * L;
 
             /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
-            dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 0, residual);
+            dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 0, freq_offset);
 
             /* do an fft of the dechirped symbol frame */
             fft_evaluate_forward(fft_output, fft_input, plan);
@@ -335,7 +335,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             if (0 == state) {
                 /* resetting everything */
                 iframe_at_last_reset = iframe;
-                residual = 0;
+                freq_offset = 0;
                 ih_bit = 0;
                 decoded_bits = 0;
                 decoded_bits_filled = 0;
@@ -383,37 +383,36 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                          +/- 0.5 case it will always prefer one of them, catching the other
                          on the next frame */
                         const float time_error = remainderf(0.5f * (mean_of_middle_upsweeps - dn_test_wrapped) - 0.25f * S, S) + 0.25f * S;
-                        const float freq_error = remainderf(mean_of_middle_upsweeps - time_error, S);
+                        freq_offset = remainderf(mean_of_middle_upsweeps - time_error, S);
 
                         const float shift_unquantized = L * time_error;
                         const int shift = lrintf(shift_unquantized);
 
-                        /* TODO: this should be corrected for time residual error */
-                        residual = freq_error;
+                        /* TODO: freq_offset should be corrected for time residual error */
 
-                        dprintf(2, "%s: time error %g, freq error %g, residual %g\n", __func__, time_error, freq_error, residual);
+                        dprintf(2, "%s: time error %g, freq offset %g\n", __func__, time_error, freq_offset);
 
                         /* consider the prior frame as both an upsweep and downsweep */
-                        dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, residual);
+                        dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, freq_offset);
                         fft_evaluate_forward(fft_output, fft_input, plan);
                         const struct argmax argmax_up_prior = circular_argmax_of_complex_vector(S, fft_output);
 
-                        dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 1, residual);
+                        dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 1, freq_offset);
                         fft_evaluate_forward(fft_output, fft_input, plan);
                         const struct argmax argmax_dn_prior = circular_argmax_of_complex_vector(S, fft_output);
 
                         /* if it was a downsweep with the expected shift... */
                         if (argmax_dn_prior.power > argmax_up_prior.power &&
-                            fabsf(argmax_dn_prior.value - residual - argmax_dn_test.value - shift_unquantized / (float)L) < 0.5f) {
+                            fabsf(argmax_dn_prior.value - freq_offset - argmax_dn_test.value - shift_unquantized / (float)L) < 0.5f) {
                             dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__,
-                                    iframe, argmax_dn_test.value + shift_unquantized / (float)L, argmax_dn_prior.value - residual);
+                                    iframe, argmax_dn_test.value + shift_unquantized / (float)L, argmax_dn_prior.value - freq_offset);
                             isample_decimated_next_frame -= shift;
 
                             /* note: we do not refine the residual using the first of the
                              two downchirps as it is contaminated by filter ringing */
 
                             dprintf(2, "%s: frame %u: data frame starts at time %u, implied carrier offset %.2f Hz\r\n",
-                                    __func__, iframe, (unsigned)(isample_decimated_next_frame - S * L), (residual * bandwidth / S));
+                                    __func__, iframe, (unsigned)(isample_decimated_next_frame - S * L), (freq_offset * bandwidth / S));
 
                             isample_decimated_preamble_start = (isample_decimated_next_frame - 7 * S * L + L / 2) / L - 1;
 
@@ -432,7 +431,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 /* KNOB: scaling factor by which our running estimate of the residual error
                  is nudged by each new symbol. longer symbols want higher values of this
                  knob, as there are fewer update opportunities */
-                residual += 0.25f * (argmax.value - lrintf(argmax.value));
+                freq_offset += 0.25f * (argmax.value - lrintf(argmax.value));
 
                 /* TODO: possibly update time alignment according to trend in residual */
 
