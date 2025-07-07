@@ -371,6 +371,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                             remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref,
                             mean_of_middle_upsweeps);
 
+                    dprintf(2, "%s: frame %u, decimated sample %zu, considering whether %zu to %zu contains a downsweep\r\n", __func__,
+                            iframe, isample_decimated,
+                            isample_decimated - S * L - S * L / 2,
+                            isample_decimated - S * L - S * L / 2 + S * L);
+
                     dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L - S * L / 2, advances, 0, -0.5f * S);
                     fft_evaluate_forward(fft_output, fft_input, plan);
                     const struct argmax argmax_up_test = circular_argmax_of_complex_vector(S, fft_output);
@@ -382,7 +387,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     /* tested interval less likely to be a downsweep than an upsweep */
                     if (argmax_dn_test.power <= argmax_up_test.power) break;
 
-                    dprintf(2, "%s: frame %u, decimated sample %zu, oldest sample %zu, downsweep detected\r\n", __func__, iframe, isample_decimated, isample_decimated - H);
+                    dprintf(2, "%s: frame %u, downsweep detected\r\n", __func__, iframe);
 
                     /* got a downsweep, should be able to unambiguously resolve time and
                      frequency shift now, as long as |frequency shift| < bw/4 */
