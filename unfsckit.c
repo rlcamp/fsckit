@@ -345,7 +345,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
             /* if listening for preamble... */
             if (1 == state) {
-                const float ref = prior_upsweeps[(iframe + 2) % 4];
+                const float ref = prior_upsweeps[(iframe + 1) % 4];
                 const float mean_of_middle_upsweeps = (remainderf(prior_upsweeps[(iframe + 0) % 4] - ref, S) + ref +
                                                        remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref) * 0.5f;
 
