@@ -401,6 +401,13 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     /* these are both in units of critical samples or frequency bins */
                     const float time_offset = remainderf(0.5f * (mean_of_middle_upsweeps - dn_test_wrapped) - time_error_midpoint, S) + time_error_midpoint;
 
+                    /* time offset falls outside of possible range */
+                    if (time_offset < time_error_midpoint - 0.25f * S ||
+                        time_offset > time_error_midpoint + 0.25f * S) {
+                        dprintf(2, "%s: frame %u: rejecting due to time alignment violation\r\n", __func__, iframe);
+                        break;
+                    }
+
                     freq_offset = remainderf(mean_of_middle_upsweeps - time_offset, S);
 
                     const float shift_unquantized = L * time_offset;
