@@ -373,8 +373,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                     /* assuming freq error is within +/- S/4, the possible time error is
                      bound to +/- S/4 of this value */
-                    const float time_error_midpoint = mean_of_middle_upsweeps;
-                    const int shift_midpoint = lrintf(L * time_error_midpoint);
+                    const float time_offset_midpoint = mean_of_middle_upsweeps;
+                    const int shift_midpoint = lrintf(L * time_offset_midpoint);
 
                     dprintf(2, "%s: frame %u, decimated sample %zu, considering whether %zu to %zu contains a downsweep\r\n", __func__,
                             iframe, isample_decimated,
@@ -399,11 +399,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     const float dn_test_wrapped = -(remainderf(-argmax_dn_test.value - mean_of_middle_upsweeps, S) + mean_of_middle_upsweeps);
 
                     /* these are both in units of critical samples or frequency bins */
-                    const float time_offset = remainderf(0.5f * (mean_of_middle_upsweeps - dn_test_wrapped) - time_error_midpoint, S) + time_error_midpoint;
+                    const float time_offset = remainderf(0.5f * (mean_of_middle_upsweeps - dn_test_wrapped) - time_offset_midpoint, S) + time_offset_midpoint;
 
                     /* time offset falls outside of possible range */
-                    if (time_offset < time_error_midpoint - 0.25f * S ||
-                        time_offset > time_error_midpoint + 0.25f * S) {
+                    if (time_offset < time_offset_midpoint - 0.25f * S ||
+                        time_offset > time_offset_midpoint + 0.25f * S) {
                         dprintf(2, "%s: frame %u: rejecting due to time alignment violation\r\n", __func__, iframe);
                         break;
                     }
