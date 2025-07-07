@@ -371,16 +371,21 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                             remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref,
                             mean_of_middle_upsweeps);
 
+                    /* assuming freq error is within +/- S/4, the possible time error is
+                     bound to +/- S/4 of this value */
+                    const float time_error_midpoint = mean_of_middle_upsweeps;
+                    const int shift_midpoint = lrintf(L * time_error_midpoint);
+
                     dprintf(2, "%s: frame %u, decimated sample %zu, considering whether %zu to %zu contains a downsweep\r\n", __func__,
                             iframe, isample_decimated,
-                            isample_decimated - S * L - S * L / 2,
-                            isample_decimated - S * L - S * L / 2 + S * L);
+                            isample_decimated - S * L - S * L / 2 - shift_midpoint,
+                            isample_decimated - S * L - S * L / 2 + S * L - shift_midpoint);
 
-                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L - S * L / 2, advances, 0, -0.5f * S);
+                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 0, -0.5f * S - shift_midpoint / (float)L);
                     fft_evaluate_forward(fft_output, fft_input, plan);
                     const struct argmax argmax_up_test = circular_argmax_of_complex_vector(S, fft_output);
 
-                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L - S * L / 2, advances, 1, -0.5f * S);
+                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 1, -0.5f * S - shift_midpoint / (float)L);
                     fft_evaluate_forward(fft_output, fft_input, plan);
                     const struct argmax argmax_dn_test = circular_argmax_of_complex_vector(S, fft_output);
 
@@ -394,10 +399,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     const float dn_test_wrapped = -(remainderf(-argmax_dn_test.value - mean_of_middle_upsweeps, S) + mean_of_middle_upsweeps);
 
                     /* these are both in units of critical samples or frequency bins */
-                    /* time offset is wrapped so that if it is close to the ambiguous
-                     +/- 0.5 case it will always prefer one of them, catching the other
-                     on the next frame */
-                    const float time_offset = remainderf(0.5f * (mean_of_middle_upsweeps - dn_test_wrapped) - 0.25f * S, S) + 0.25f * S;
+                    const float time_offset = remainderf(0.5f * (mean_of_middle_upsweeps - dn_test_wrapped) - time_error_midpoint, S) + time_error_midpoint;
+
                     freq_offset = remainderf(mean_of_middle_upsweeps - time_offset, S);
 
                     const float shift_unquantized = L * time_offset;
