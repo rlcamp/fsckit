@@ -346,17 +346,15 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             /* if listening for preamble... */
             if (1 == state) {
                 const float ref = prior_upsweeps[(iframe + 2) % 4];
-                const float mean_of_middle_upsweeps = (remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref +
-                                                       remainderf(prior_upsweeps[(iframe + 2) % 4] - ref, S) + ref) * 0.5f;
+                const float mean_of_middle_upsweeps = (remainderf(prior_upsweeps[(iframe + 0) % 4] - ref, S) + ref +
+                                                       remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref) * 0.5f;
 
                 if (iframe - iframe_at_last_reset >= 5 &&
-                    fabsf(remainderf(prior_upsweeps[(iframe + 0) % 4] - ref, S) + ref - mean_of_middle_upsweeps) < 1.0f &&
-                    fabsf(remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref - mean_of_middle_upsweeps) < 0.5f &&
-                    fabsf(remainderf(prior_upsweeps[(iframe + 2) % 4] - ref, S) + ref - mean_of_middle_upsweeps) < 0.5f) {
-                    dprintf(2, "%s: frame %u: oldest three upsweeps agree %g %g %g -> %.3f\r\n", __func__, iframe,
+                    fabsf(remainderf(prior_upsweeps[(iframe + 0) % 4] - ref, S) + ref - mean_of_middle_upsweeps) < 0.5f &&
+                    fabsf(remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref - mean_of_middle_upsweeps) < 0.5f) {
+                    dprintf(2, "%s: frame %u: two upsweeps agree %g %g -> %.3f\r\n", __func__, iframe,
                             remainderf(prior_upsweeps[(iframe + 0) % 4] - ref, S) + ref,
                             remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref,
-                            remainderf(prior_upsweeps[(iframe + 2) % 4] - ref, S) + ref,
                             mean_of_middle_upsweeps);
 
                     dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L - S * L / 2, advances, 0, -0.5f * S);
