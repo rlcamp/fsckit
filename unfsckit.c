@@ -230,7 +230,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     /* KNOB: this scaling factor on bandwidth in the filter parameters strongly affects the
      result. higher values admit more noise, lower values distort the passband */
     float biquad_num[BIQUAD_STAGES][3], biquad_den[BIQUAD_STAGES][3];
-    butterworth_biquads(BIQUAD_STAGES, biquad_num, biquad_den, sample_rate, 0.8f * bandwidth);
+    butterworth_biquads(BIQUAD_STAGES, biquad_num, biquad_den, sample_rate, 1.5f * bandwidth);
 
     const float input_samples_per_filtered_sample = sample_rate / sample_rate_filtered;
 
