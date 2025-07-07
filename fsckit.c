@@ -7,6 +7,27 @@
 #include <string.h>
 #include <limits.h>
 
+static uint64_t xorshift64star(void) {
+    /* marsaglia et al. generates 64 bits at a time, the most significant bits are the most random */
+    static uint64_t x = 1; /* must be nonzero */
+    x ^= x >> 12;
+    x ^= x << 25;
+    x ^= x >> 27;
+    return x * 0x2545F4914F6CDD1DULL;
+}
+
+static float frand_minus_frand(void) {
+    /* generate 64 random bits, of which we will use the most significant 46, in two groups of 23 */
+    const uint64_t bits = xorshift64star();
+
+    /* generate two random numbers each uniformly distributed on [1.0f, 2.0f) */
+    const union { uint32_t u; float f; } x = { .u = 0x3F800000U | ((bits >> 41) & 0x7FFFFFU) };
+    const union { uint32_t u; float f; } y = { .u = 0x3F800000U | ((bits >> 18) & 0x7FFFFFU) };
+
+    /* and subtract them, yielding a triangular distribution on [-1.0f, +1.0f] */
+    return x.f - y.f;
+}
+
 static float complex renormalize(const float complex x) {
     /* assuming x is already near unity, renormalize to unity w/o div or sqrt */
     const float magsquared = crealf(x) * crealf(x) + cimagf(x) * cimagf(x);
@@ -26,7 +47,7 @@ static float complex emit_sweep(void (* emit_sample_func)(void *, const int16_t)
     float complex modulation = 1.0f;
 
     for (size_t it = 0; it < T; it++) {
-        emit_sample_func(emit_sample_ctx, lrintf(cimagf(carrier * modulation) * amplitude));
+        emit_sample_func(emit_sample_ctx, lrintf(cimagf(carrier * modulation) * amplitude + frand_minus_frand()));
         modulation = renormalize(modulation * modulation_advances[((down ? T - it : it) + shift) % T]);
         carrier = renormalize(carrier * carrier_advance);
     }
@@ -175,7 +196,7 @@ float complex fsckit(void (* emit_sample_func)(void *, const int16_t), void * em
 
     const float initial_imag = cimagf(carrier);
     while (cimagf(carrier) * initial_imag > 0.0f) {
-        emit_sample_func(emit_sample_ctx, lrintf(cimagf(carrier) * amplitude));
+        emit_sample_func(emit_sample_ctx, lrintf(cimagf(carrier) * amplitude + frand_minus_frand()));
         carrier = renormalize(carrier * carrier_advance);
     }
 
@@ -223,7 +244,7 @@ int main(const int argc, const char * const * const argv) {
 
     /* emit one sweep period of quiet samples */
     for (size_t it = 0; it < chirp_period_in_samples; it++)
-        fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
+        fwrite(&(int16_t) { lrintf(frand_minus_frand()) }, sizeof(int16_t), 1, stdout);
 
     float complex carrier = 1.0f;
 
@@ -240,5 +261,5 @@ int main(const int argc, const char * const * const argv) {
 
     /* emit some quiet samples to flush the decoder if being piped directly into it */
     for (size_t it = 0; it < chirp_period_in_samples; it++)
-        fwrite(&(int16_t) { 0 }, sizeof(int16_t), 1, stdout);
+        fwrite(&(int16_t) { lrintf(frand_minus_frand()) }, sizeof(int16_t), 1, stdout);
 }
