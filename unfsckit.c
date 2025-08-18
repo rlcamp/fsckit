@@ -161,8 +161,13 @@ static unsigned char hamming(unsigned char x) {
                 (((x >> 0U) ^ (x >> 1U) ^ (x >> 3U)) & 0x1) << 6U);
 }
 
-static unsigned char soft_decode_hamming_naive(const size_t interleave,
-                                               const float soft_bit_history[restrict 7 * interleave]) {
+struct soft_decode_result {
+    unsigned char iword;
+    float score;
+};
+
+static struct soft_decode_result soft_decode_hamming_naive(const size_t interleave,
+                                                    const float soft_bit_history[restrict 7 * interleave]) {
     /* perform naive exhaustive ML decoding of 7 soft bits to get 4 hard bits */
     float best = 0;
     unsigned char iword_best = 0;
@@ -185,8 +190,13 @@ static unsigned char soft_decode_hamming_naive(const size_t interleave,
             iword_best = iword;
         }
     }
-    if (verbose >= 1) dprintf(2, "%s: best score %.2f\r\n", __func__, best);
-    return iword_best;
+
+    if (verbose >= 2) dprintf(2, "%s: best score %.2f\r\n", __func__, best);
+
+    return (struct soft_decode_result) {
+        .iword = iword_best,
+        .score = best
+    };
 }
 
 static unsigned long long soft_decode_block_hamming(const size_t interleave,
@@ -194,10 +204,16 @@ static unsigned long long soft_decode_block_hamming(const size_t interleave,
     /* this takes a block of 7 * interleave soft bits and returns 4 * interleave hard bit
      decisions, giving some robustness against burst interference in the chirp layer */
     /* TODO: replace interleaved hamming codes with something more intelligent */
+    float score_sum = 0.0f;
     unsigned long long ret = 0;
 
-    for (size_t iblock = 0; iblock < interleave; iblock++)
-        ret |= soft_decode_hamming_naive(interleave, soft_bit_history + iblock) << 4U * iblock;
+    for (size_t iblock = 0; iblock < interleave; iblock++) {
+        struct soft_decode_result res = soft_decode_hamming_naive(interleave, soft_bit_history + iblock);
+        ret |= res.iword << 4U * iblock;
+        score_sum += res.score;
+    }
+    if (verbose >= 1)
+        dprintf(2, "%s: best scores sum to %.2f/%lu\r\n", __func__, score_sum, 7 * interleave);
     return ret;
 }
 
