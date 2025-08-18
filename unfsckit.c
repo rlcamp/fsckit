@@ -10,6 +10,8 @@
 #include <float.h>
 #include <string.h>
 
+__attribute((weak)) unsigned char verbose = 1;
+
 static float cmagsquaredf(const float complex x) {
     return crealf(x) * crealf(x) + cimagf(x) * cimagf(x);
 }
@@ -183,7 +185,7 @@ static unsigned char soft_decode_hamming_naive(const size_t interleave,
             iword_best = iword;
         }
     }
-    dprintf(2, "%s: best score %.2f\r\n", __func__, best);
+    if (verbose >= 1) dprintf(2, "%s: best score %.2f\r\n", __func__, best);
     return iword_best;
 }
 
@@ -356,12 +358,14 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     const float time_offset_midpoint = mean_of_middle_upsweeps;
                     const int shift_midpoint = lrintf(L * time_offset_midpoint);
 
-                    dprintf(2, "%s: frame %u: two upsweeps agree %.7f %.7f -> %.3f, implied alignment if zero frequency shift is %zu\r\n", __func__, iframe,
-                            remainderf(prior_upsweeps[(iframe + 0) % 4] - ref, S) + ref,
-                            remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref,
-                            mean_of_middle_upsweeps, isample_decimated - shift_midpoint);
+                    if (verbose >= 2)
+                        dprintf(2, "%s: frame %u: two upsweeps agree %.7f %.7f -> %.3f, implied alignment if zero frequency shift is %zu\r\n", __func__, iframe,
+                                remainderf(prior_upsweeps[(iframe + 0) % 4] - ref, S) + ref,
+                                remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref,
+                                mean_of_middle_upsweeps, isample_decimated - shift_midpoint);
 
-                    dprintf(2, "%s: frame %u: decimated sample %zu, considering whether %zu to %zu contains a downsweep\r\n", __func__,
+                    if (verbose >= 2)
+                        dprintf(2, "%s: frame %u: decimated sample %zu, considering whether %zu to %zu contains a downsweep\r\n", __func__,
                             iframe, isample_decimated,
                             isample_decimated - S * L - S * L / 2 - shift_midpoint,
                             isample_decimated - S * L - S * L / 2 + S * L - shift_midpoint);
@@ -377,7 +381,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     /* tested interval less likely to be a downsweep than an upsweep */
                     if (argmax_dn_test.power <= argmax_up_test.power) break;
 
-                    dprintf(2, "%s: frame %u: downsweep detected (%.2f > %.2f)\r\n", __func__, iframe, 10.0f * log10f(argmax_dn_test.power), 10.0f * log10f(argmax_up_test.power));
+                    if (verbose >= 2)
+                        dprintf(2, "%s: frame %u: downsweep detected (%.2f > %.2f)\r\n", __func__, iframe, 10.0f * log10f(argmax_dn_test.power), 10.0f * log10f(argmax_up_test.power));
 
                     /* got a downsweep, should be able to unambiguously resolve time and
                      frequency shift now, as long as |frequency shift| < bw/4 */
@@ -389,6 +394,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     /* time offset falls outside of possible range */
                     if (time_offset < time_offset_midpoint - 0.25f * S ||
                         time_offset > time_offset_midpoint + 0.25f * S) {
+                        /* TODO: does this ever happen or is this check redundant? */
                         dprintf(2, "%s: frame %u: rejecting due to time alignment violation\r\n", __func__, iframe);
                         break;
                     }
@@ -400,8 +406,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                     /* TODO: freq_offset should be corrected for time residual error */
 
-                    dprintf(2, "%s: frame %u: time offset %.3f bins (%.3f samples), freq offset %.3f bins (%.3f Hz)\r\n", __func__, iframe,
-                            time_offset, time_offset * L, freq_offset, freq_offset * bandwidth / S);
+                    if (verbose >= 2)
+                        dprintf(2, "%s: frame %u: time offset %.3f bins (%.3f samples), freq offset %.3f bins (%.3f Hz)\r\n", __func__, iframe,
+                                time_offset, time_offset * L, freq_offset, freq_offset * bandwidth / S);
 
                     /* consider the prior frame as both an upsweep and downsweep */
                     dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, freq_offset);
@@ -412,8 +419,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     fft_evaluate_forward(fft_output, fft_input, plan);
                     const struct argmax argmax_dn_prior = circular_argmax_of_complex_vector(S, fft_output);
 
-                    dprintf(2, "%s: frame %u: decimated sample %zu: considering whether %zu to %zu contains a downsweep\r\n", __func__,
-                            iframe, isample_decimated, isample_decimated - 2 * S * L - shift, isample_decimated - 2 * S * L - shift + S * L);
+                    if (verbose >= 2)
+                        dprintf(2, "%s: frame %u: decimated sample %zu: considering whether %zu to %zu contains a downsweep\r\n", __func__,
+                                iframe, isample_decimated, isample_decimated - 2 * S * L - shift, isample_decimated - 2 * S * L - shift + S * L);
 
                     /* tested interval less likely to be a downsweep than an upsweep */
                     if (argmax_dn_prior.power <= argmax_up_prior.power) break;
@@ -421,15 +429,17 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     /* if it was a downsweep with the expected shift... */
                     if (fabsf(remainderf(argmax_dn_test.value + shift_unquantized / (float)L - argmax_dn_prior.value + freq_offset, S)) >= 1.0f) break;
 
-                    dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__,
+                    if (verbose >= 2)
+                        dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__,
                                 iframe, argmax_dn_test.value + shift_unquantized / (float)L, argmax_dn_prior.value - freq_offset);
                     isample_decimated_next_frame -= shift;
 
                     /* note: we do not refine the residual using the first of the
                      two downchirps as it is contaminated by filter ringing */
 
-                    dprintf(2, "%s: frame %u: data frame starts at time %zu, implied carrier offset %.2f Hz\r\n",
-                            __func__, iframe, isample_decimated_next_frame - S * L, (freq_offset * bandwidth / S));
+                    if (verbose >= 1)
+                        dprintf(2, "%s: frame %u: preamble detected, data frame starts at time %zu, implied carrier offset %.2f Hz\r\n",
+                                __func__, iframe, isample_decimated_next_frame - S * L, (freq_offset * bandwidth / S));
 
                     isample_decimated_preamble_start = (isample_decimated_next_frame - 7 * S * L + L / 2) / L - 1;
 
