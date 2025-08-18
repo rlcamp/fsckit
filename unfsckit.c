@@ -330,8 +330,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             /* find index (incl estimating the fractional part) of the loudest fft bin */
             const struct argmax argmax = circular_argmax_of_complex_vector(S, fft_output);
 
-            if (!argmax.power) continue;
-
             if (0 == state) {
                 /* resetting everything */
                 iframe_at_last_reset = iframe;
@@ -345,12 +343,15 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
             /* if listening for preamble... */
             if (1 == state) {
-                const float ref = prior_upsweeps[(iframe + 1) % 4];
-                const float mean_of_middle_upsweeps = (remainderf(prior_upsweeps[(iframe + 0) % 4] - ref, S) + ref +
-                                                       remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref) * 0.5f;
-
                 /* apply a bunch of criteria for advancing out of preamble detection state */
                 do {
+                    const float ref = prior_upsweeps[(iframe + 1) % 4];
+                    if (FLT_MAX == ref) break;
+                    if (FLT_MAX == prior_upsweeps[(iframe + 0) % 4]) break;
+
+                    const float mean_of_middle_upsweeps = (remainderf(prior_upsweeps[(iframe + 0) % 4] - ref, S) + ref +
+                                                           remainderf(prior_upsweeps[(iframe + 1) % 4] - ref, S) + ref) * 0.5f;
+
                     /* not enought time elapsed to see preamble upsweeps */
                     if (iframe - iframe_at_last_reset < 5) break;
 
