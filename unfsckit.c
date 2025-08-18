@@ -322,7 +322,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             isample_decimated_next_frame += S * L;
 
             /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
-            dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 0, freq_offset);
+            dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 0, state < 2 ? 0.0f : freq_offset);
 
             /* do an fft of the dechirped symbol frame */
             fft_evaluate_forward(fft_output, fft_input, plan);
