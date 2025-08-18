@@ -449,11 +449,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     fft_evaluate_forward(fft_output, fft_input, plan);
 
                     /* find index (incl estimating the fractional part) of the loudest fft bin */
-                    const struct argmax argmax = circular_argmax_of_complex_vector(S, fft_output);
-
-                    dprintf(2, "%s: frame %u, isample_decimated %zu: buffering upsweep %.7f\r\n", __func__,
-                            iframe, isample_decimated, argmax.value);
-                    prior_upsweeps[iframe % 4] = argmax.value;
+                    prior_upsweeps[iframe % 4] = circular_argmax_of_complex_vector(S, fft_output).value;
                 }
             } else {
                 /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
