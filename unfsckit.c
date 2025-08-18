@@ -321,15 +321,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             if (isample_decimated != isample_decimated_next_frame) continue;
             isample_decimated_next_frame += S * L;
 
-            /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
-            dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 0, state < 2 ? 0.0f : freq_offset);
-
-            /* do an fft of the dechirped symbol frame */
-            fft_evaluate_forward(fft_output, fft_input, plan);
-
-            /* find index (incl estimating the fractional part) of the loudest fft bin */
-            const struct argmax argmax = circular_argmax_of_complex_vector(S, fft_output);
-
             if (0 == state) {
                 /* resetting everything */
                 iframe_at_last_reset = iframe;
@@ -449,10 +440,31 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     state++;
                 } while(0);
 
-                dprintf(2, "%s: frame %u, isample_decimated %zu: buffering upsweep %.7f\r\n", __func__,
-                        iframe, isample_decimated, argmax.value);
-                prior_upsweeps[iframe % 4] = argmax.value;
+                /* if we did not advance out of detection state... */
+                if (state < 2) {
+                    /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
+                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 0, 0.0f);
+
+                    /* do an fft of the dechirped symbol frame */
+                    fft_evaluate_forward(fft_output, fft_input, plan);
+
+                    /* find index (incl estimating the fractional part) of the loudest fft bin */
+                    const struct argmax argmax = circular_argmax_of_complex_vector(S, fft_output);
+
+                    dprintf(2, "%s: frame %u, isample_decimated %zu: buffering upsweep %.7f\r\n", __func__,
+                            iframe, isample_decimated, argmax.value);
+                    prior_upsweeps[iframe % 4] = argmax.value;
+                }
             } else {
+                /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
+                dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 0, freq_offset);
+
+                /* do an fft of the dechirped symbol frame */
+                fft_evaluate_forward(fft_output, fft_input, plan);
+
+                /* find index (incl estimating the fractional part) of the loudest fft bin */
+                const struct argmax argmax = circular_argmax_of_complex_vector(S, fft_output);
+
                 /* KNOB: scaling factor by which our running estimate of the residual error
                  is nudged by each new symbol. longer symbols want higher values of this
                  knob, as there are fewer update opportunities */
