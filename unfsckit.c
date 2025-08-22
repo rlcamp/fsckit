@@ -213,7 +213,7 @@ static unsigned long long soft_decode_block_hamming(const size_t interleave,
         score_sum += res.score;
     }
     if (verbose >= 1)
-        dprintf(2, "%s: best scores sum to %.2f/%lu\r\n", __func__, score_sum, 7 * interleave);
+        dprintf(2, "%s: best scores sum to %.2f\r\n", __func__, score_sum);
     return ret;
 }
 
