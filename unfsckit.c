@@ -143,7 +143,7 @@ static unsigned gray(unsigned x) {
 
 static float soft_bit_decision_from_fft(const size_t ibit, const size_t S,
                                         const float complex s[restrict static S]) {
-    /* returns +1.0 if the bit is definitely clear, -1.0 if definitely set, 0 if erasure */
+    /* returns +lots if the bit is definitely clear, -lots if definitely set, 0 if erasure */
     float power_if_clr = 0.0f, power_if_set = 0.0f;
     for (size_t is = 0; is < S; is++)
     /* if this bit is set in the gray code of this symbol... */
@@ -152,8 +152,7 @@ static float soft_bit_decision_from_fft(const size_t ibit, const size_t S,
         else
             power_if_clr += cmagsquaredf(s[is]);
 
-    const float denominator = power_if_clr + power_if_set;
-    return denominator ? (power_if_clr - power_if_set) / denominator : 0.0f;
+    return !power_if_set ? FLT_MAX : !power_if_clr ? -FLT_MAX : logf(power_if_clr / power_if_set);
 }
 
 static unsigned char hamming(unsigned char x) {
@@ -180,7 +179,7 @@ static struct soft_decode_result soft_decode_hamming_naive(const size_t interlea
         /* take dot product between soft bits and the hamming code of this code word */
         float acc = 0;
         for (unsigned char ibit = 0, mask = 1; ibit < 7; ibit++, mask <<= 1) {
-            /* assumes that +1.0 means the bit is clear, -1.0 means the bit is set */
+            /* assumes that + means the bit is clear, - means the bit is set */
             const float y = soft_bit_history[interleave * ibit];
             if (h & mask) acc -= y;
             else acc += y;
