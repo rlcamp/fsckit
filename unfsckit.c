@@ -602,14 +602,35 @@ static void preamble_detected(const size_t it, void * ctx) {
 #include <assert.h>
 
 __attribute((weak))
-int main(const int argc, const char * const * const argv) {
+int main(const int argc, char * argv[]) {
+    /* get a progname for diagnostic text, regardless of runtime environment */
+    const char * o, * progname = argc ? ((o = strrchr(argv[0], '/')) ? o + 1 : argv[0]) : __func__;
 
-    /* input arguments, all in cycles, samples, or symbols per second */
-    const float f_carrier = argc > 1 ? strtof(argv[1], NULL) : 1500.0f;
-    const float bandwidth = argc > 2 ? strtof(argv[2], NULL) : 250.0f;
-    const float sample_rate = argc > 3 ? strtof(argv[3], NULL) : 48000.0f;
-    const unsigned bits_per_sweep = argc > 4 ? strtoul(argv[4], NULL, 10) : 5;
-    const unsigned interleave = argc > 5 ? strtoul(argv[5], NULL, 10) : 6;
+    float f_carrier = 1500.0f; /* Hz */
+    float bandwidth = 250.0f; /* Hz */
+    float sample_rate = 48000.0f; /* samples per second */
+
+    unsigned bits_per_sweep = 5;
+    unsigned interleave = 6;
+
+    /* handle --[key]=[value] or space-separated [key] [value] argument pairs */
+    for (int iarg = 1; iarg < argc; iarg++) {
+        char * key = argv[iarg] + (!strncmp(argv[iarg], "--", 2) ? 2 : 0);
+        const size_t keylen = strcspn(key, "=");
+        const char * val = '=' == key[keylen] ? key + keylen + 1 : argv[iarg + 1] ? argv[++iarg] : "";
+        key[keylen] = '\0';
+
+        if (!strcmp(key, "fs")) sample_rate = strtof(val, NULL);
+        else if (!strcmp(key, "fc")) f_carrier = strtof(val, NULL);
+        else if (!strcmp(key, "bandwidth")) bandwidth = strtof(val, NULL);
+        else if (!strcmp(key, "bits_per_sweep")) bits_per_sweep = strtoul(val, NULL, 10);
+        else if (!strcmp(key, "interleave")) interleave = strtoul(val, NULL, 10);
+
+        else {
+            dprintf(2, "error: %s: unrecognized argument \"%s\"\n", progname, key);
+            exit(EXIT_FAILURE);
+        }
+    }
 
     assert(interleave * HAMMING_K <= 56);
     assert(bits_per_sweep > 1);
