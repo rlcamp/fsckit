@@ -575,13 +575,18 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
 /* everything that follows is an optional cmdline interface for standalone usage */
 
-static const int16_t * get_samples_from_stdin(const int16_t ** end_p, size_t * stride_p, void * ctx) {
-    int16_t * buf = ctx;
-    const ssize_t ret = fread(buf, sizeof(int16_t), 32, stdin);
+struct input_ctx {
+    size_t H, C, ic;
+    int16_t buf[];
+};
+
+static const int16_t * get_samples_from_stdin(const int16_t ** end_p, size_t * stride_p, void * ctxv) {
+    struct input_ctx * ctx = ctxv;
+    const ssize_t ret = fread(ctx->buf, sizeof(int16_t), ctx->C * ctx->H, stdin);
     if (ret <= 0) return NULL;
-    *end_p = buf + ret;
-    *stride_p = 1;
-    return buf;
+    *end_p = ctx->buf + ret + ctx->ic;
+    *stride_p = ctx->C;
+    return ctx->buf + ctx->ic;
 }
 
 static int last_byte = -1;
@@ -613,6 +618,9 @@ int main(const int argc, char * argv[]) {
     unsigned bits_per_sweep = 5;
     unsigned interleave = 6;
 
+    size_t C = 1;
+    size_t ic = 0;
+
     /* handle --[key]=[value] or space-separated [key] [value] argument pairs */
     for (int iarg = 1; iarg < argc; iarg++) {
         char * key = argv[iarg] + (!strncmp(argv[iarg], "--", 2) ? 2 : 0);
@@ -625,6 +633,8 @@ int main(const int argc, char * argv[]) {
         else if (!strcmp(key, "bandwidth")) bandwidth = strtof(val, NULL);
         else if (!strcmp(key, "bits_per_sweep")) bits_per_sweep = strtoul(val, NULL, 10);
         else if (!strcmp(key, "interleave")) interleave = strtoul(val, NULL, 10);
+        else if (!strcmp(key, "C")) C = strtoul(val, NULL, 10);
+        else if (!strcmp(key, "channel")) ic = strtoul(val, NULL, 10);
 
         else {
             dprintf(2, "error: %s: unrecognized argument \"%s\"\n", progname, key);
@@ -638,12 +648,20 @@ int main(const int argc, char * argv[]) {
     setvbuf(stdin, NULL, _IONBF, 0);
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    int16_t buf[32];
-    unfsckit(get_samples_from_stdin, buf,
+    struct input_ctx * ctx = malloc(sizeof(struct input_ctx) + sizeof(int16_t) * C * 32);
+    *ctx = (struct input_ctx) {
+        .H = 32,
+        .C = C,
+        .ic = ic
+    };
+
+    unfsckit(get_samples_from_stdin, ctx,
              write_payload_to_stdout, NULL,
              preamble_detected, &(float) { bandwidth },
              sample_rate, f_carrier, bandwidth, bits_per_sweep, interleave);
 
     if (last_byte != -1 && last_byte != '\n' && isatty(STDOUT_FILENO))
         fputc('\n', stdout);
+
+    free(ctx);
 }
