@@ -61,6 +61,7 @@ static float complex cosisinf(const float x) {
 
 static void dechirp(const size_t S, const size_t L, const size_t H,
                     float complex fft_input[restrict static S],
+                    const float window[restrict static S],
                     const float complex history[restrict static H], const size_t ih,
                     const float complex advances[restrict static S * L], const char down,
                     const float freq_offset) {
@@ -72,7 +73,7 @@ static void dechirp(const size_t S, const size_t L, const size_t H,
 
     for (size_t is = 0; is < S; is++) {
         /* TODO: document this indexing math wow */
-        fft_input[is] = history[(is * L + ih) % H] * (down ? carrier : conjf(carrier));
+        fft_input[is] = history[(is * L + ih) % H] * (down ? carrier : conjf(carrier)) * window[is];
         carrier = renormalize(carrier * advances[(is * L) % (S * L)] * extra);
     }
 }
@@ -268,6 +269,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     float complex * restrict const advances = malloc(sizeof(float complex) * S * L);
     float * restrict const soft_bit_history = malloc(sizeof(float) * N);
 
+    /* construct a periodic Hann window */
+    float * restrict const window = malloc(sizeof(float) * S);
+    for (size_t is = 0; is < S; is++)
+        window[is] = 1.0f - cosf(2.0f * (float)M_PI * is / S);
+
     populate_advances(S, L, advances);
 
     /* biquad cascade filter state */
@@ -332,6 +338,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             if (input_samples_since_filtered_sample + 0.5f < input_samples_per_filtered_sample) continue;
             input_samples_since_filtered_sample -= input_samples_per_filtered_sample;
 
+            write(3, &filtered, sizeof(float complex));
+
             /* store the basebanded filtered decimated samples in a ring buffer */
             basebanded_ring[(isample_decimated++) % H] = filtered;
 
@@ -386,11 +394,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                             isample_decimated - S * L - S * L / 2 - shift_midpoint,
                             isample_decimated - S * L - S * L / 2 + S * L - shift_midpoint);
 
-                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 0, -0.5f * S - shift_midpoint / (float)L);
+                    dechirp(S, L, H, fft_input, window, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 0, -0.5f * S - shift_midpoint / (float)L);
                     fft_evaluate_forward(fft_output, fft_input, plan);
                     const struct argmax argmax_up_test = circular_argmax_of_complex_vector(S, fft_output);
 
-                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 1, -0.5f * S - shift_midpoint / (float)L);
+                    dechirp(S, L, H, fft_input, window, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 1, -0.5f * S - shift_midpoint / (float)L);
                     fft_evaluate_forward(fft_output, fft_input, plan);
                     const struct argmax argmax_dn_test = circular_argmax_of_complex_vector(S, fft_output);
 
@@ -427,11 +435,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                 time_offset, time_offset * L, freq_offset, freq_offset * bandwidth / S);
 
                     /* consider the prior frame as both an upsweep and downsweep */
-                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, freq_offset);
+                    dechirp(S, L, H, fft_input, window, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, freq_offset);
                     fft_evaluate_forward(fft_output, fft_input, plan);
                     const struct argmax argmax_up_prior = circular_argmax_of_complex_vector(S, fft_output);
 
-                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 1, freq_offset);
+                    dechirp(S, L, H, fft_input, window, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 1, freq_offset);
                     fft_evaluate_forward(fft_output, fft_input, plan);
                     const struct argmax argmax_dn_prior = circular_argmax_of_complex_vector(S, fft_output);
 
@@ -469,7 +477,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 /* if we did not advance out of detection state... */
                 if (state < 2) {
                     /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
-                    dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 0, 0.0f);
+                    dechirp(S, L, H, fft_input, window, basebanded_ring, isample_decimated - S * L, advances, 0, 0.0f);
 
                     /* do an fft of the dechirped symbol frame */
                     fft_evaluate_forward(fft_output, fft_input, plan);
@@ -479,7 +487,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 }
             } else {
                 /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
-                dechirp(S, L, H, fft_input, basebanded_ring, isample_decimated - S * L, advances, 0, freq_offset);
+                dechirp(S, L, H, fft_input, window, basebanded_ring, isample_decimated - S * L, advances, 0, freq_offset);
 
                 /* do an fft of the dechirped symbol frame */
                 fft_evaluate_forward(fft_output, fft_input, plan);
@@ -556,6 +564,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
         }
 
     destroy_planned_forward_fft(plan);
+    free(window);
     free(advances);
     free(fft_output);
     free(fft_input);
