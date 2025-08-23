@@ -63,7 +63,7 @@ static void dechirp(const size_t S, const size_t L, const size_t H,
                     float complex fft_input[restrict static S],
                     const float window[restrict static S],
                     const float complex history[restrict static H], const size_t ih,
-                    const float complex advances[restrict static S * L], const char down,
+                    const float complex advances[restrict static S], const char down,
                     const float freq_offset) {
     /* extract critically sampled values from history, and multiply by conjugate of chirp */
     float complex carrier = 1.0f;
@@ -74,18 +74,17 @@ static void dechirp(const size_t S, const size_t L, const size_t H,
     for (size_t is = 0; is < S; is++) {
         /* TODO: document this indexing math wow */
         fft_input[is] = history[(is * L + ih) % H] * (down ? carrier : conjf(carrier)) * window[is];
-        carrier = renormalize(carrier * advances[(is * L) % (S * L)] * extra);
+        carrier = renormalize(carrier * advances[is % S] * extra);
     }
 }
 
-static void populate_advances(const size_t S, const size_t L,
-                              float complex advances[restrict static S * L]) {
-    /* construct a lookup table of the S*L roots of unity we need for dechirping the input.
+static void populate_advances(const size_t S, float complex advances[restrict static S]) {
+    /* construct a lookup table of the S roots of unity we need for dechirping the input.
      these will be uniformly spaced about the unit circle starting near -1 on the real axis */
     float complex advance = -1.0f * cosisinf(2.0f * (float)M_PI * 0.5f / S);;
-    const float complex advance_advance = cosisinf(2.0f * (float)M_PI / (S * L));
-    for (size_t isl = 0; isl < S * L; isl++) {
-        advances[isl] = advance;
+    const float complex advance_advance = cosisinf(2.0f * (float)M_PI / S);
+    for (size_t is = 0; is < S; is++) {
+        advances[is] = advance;
         advance = renormalize(advance * advance_advance);
     }
 }
@@ -265,7 +264,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     float complex * restrict const basebanded_ring = malloc(sizeof(float complex) * H);
     float complex * restrict const fft_input = malloc(sizeof(float complex) * S);
     float complex * restrict const fft_output = malloc(sizeof(float complex) * S);
-    float complex * restrict const advances = malloc(sizeof(float complex) * S * L);
+    float complex * restrict const advances = malloc(sizeof(float complex) * S);
     float * restrict const soft_bit_history = malloc(sizeof(float) * N);
 
     /* construct a periodic Hann window */
@@ -273,7 +272,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     for (size_t is = 0; is < S; is++)
         window[is] = 1.0f - cosf(2.0f * (float)M_PI * is / S);
 
-    populate_advances(S, L, advances);
+    populate_advances(S, advances);
 
     /* biquad cascade filter state */
     float complex vprev[BIQUAD_STAGES][2] = { 0 };
