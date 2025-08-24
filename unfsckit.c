@@ -461,9 +461,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                     if (verbose >= 1)
                         dprintf(2, "%s: frame %u: preamble detected, data frame starts at time %zu, implied carrier offset %.2f Hz\r\n",
-                                __func__, iframe, isample_decimated_next_frame - S * L, (freq_offset * bandwidth / S));
+                                __func__, iframe, isample_decimated, (freq_offset * bandwidth / S));
 
-                    critical_sample_preamble_start = (isample_decimated_next_frame - 7 * S * L + L / 2) / L - 1;
+                    critical_sample_preamble_start = (isample_decimated - shift - 6 * S * L + L / 2) / L - 1;
 
                     if (preamble_detected_func)
                     /* estimate the absolute time of the start of the first chirp, in units of 1/bandwidth */
