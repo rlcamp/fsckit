@@ -340,8 +340,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             if (input_samples_since_filtered_sample + 0.5f < input_samples_per_filtered_sample) continue;
             input_samples_since_filtered_sample -= input_samples_per_filtered_sample;
 
-            write(3, &filtered, sizeof(float complex));
-
             /* store the basebanded filtered decimated samples in a ring buffer */
             basebanded_ring[(isample_decimated++) % H] = filtered;
 
