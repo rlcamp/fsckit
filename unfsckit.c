@@ -59,12 +59,14 @@ static float complex cosisinf(const float x) {
     return cosf(x) + I * sinf(x);
 }
 
-static void dechirp(const size_t S, const size_t L, const size_t H,
-                    float complex fft_input[restrict static S],
-                    const float window[restrict static S],
-                    const float complex history[restrict static H], const size_t ih,
-                    const float complex advances[restrict static S], const char down,
-                    const float freq_offset) {
+static void dechirped_fft(const size_t S, const size_t L, const size_t H,
+                          float complex fft_output[restrict static S],
+                          float complex fft_input[restrict static S],
+                          const struct planned_forward_fft * plan,
+                          const float window[restrict static S],
+                          const float complex history[restrict static H], const size_t ih,
+                          const float complex advances[restrict static S], const char down,
+                          const float freq_offset) {
     /* extract critically sampled values from history, and multiply by conjugate of chirp */
     float complex carrier = 1.0f;
 
@@ -76,6 +78,8 @@ static void dechirp(const size_t S, const size_t L, const size_t H,
         fft_input[is] = history[(is * L + ih) % H] * (down ? carrier : conjf(carrier)) * window[is];
         carrier = renormalize(carrier * advances[is % S] * extra);
     }
+
+    fft_evaluate_forward(fft_output, fft_input, plan);
 }
 
 static void populate_advances(const size_t S, float complex advances[restrict static S]) {
@@ -392,12 +396,10 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                             isample_decimated - S * L - S * L / 2 - shift_midpoint,
                             isample_decimated - S * L - S * L / 2 + S * L - shift_midpoint);
 
-                    dechirp(S, L, H, fft_input, window, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 0, -0.5f * S - shift_midpoint / (float)L);
-                    fft_evaluate_forward(fft_output, fft_input, plan);
+                    dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 0, -0.5f * S - shift_midpoint / (float)L);
                     const struct argmax argmax_up_test = circular_argmax_of_complex_vector(S, fft_output);
 
-                    dechirp(S, L, H, fft_input, window, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 1, -0.5f * S - shift_midpoint / (float)L);
-                    fft_evaluate_forward(fft_output, fft_input, plan);
+                    dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 1, -0.5f * S - shift_midpoint / (float)L);
                     const struct argmax argmax_dn_test = circular_argmax_of_complex_vector(S, fft_output);
 
                     /* tested interval less likely to be a downsweep than an upsweep */
@@ -433,12 +435,10 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                 time_offset, time_offset * L, freq_offset, freq_offset * bandwidth / S);
 
                     /* consider the prior frame as both an upsweep and downsweep */
-                    dechirp(S, L, H, fft_input, window, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, freq_offset);
-                    fft_evaluate_forward(fft_output, fft_input, plan);
+                    dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 0, freq_offset);
                     const struct argmax argmax_up_prior = circular_argmax_of_complex_vector(S, fft_output);
 
-                    dechirp(S, L, H, fft_input, window, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 1, freq_offset);
-                    fft_evaluate_forward(fft_output, fft_input, plan);
+                    dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - 2 * S * L - shift, advances, 1, freq_offset);
                     const struct argmax argmax_dn_prior = circular_argmax_of_complex_vector(S, fft_output);
 
                     if (verbose >= 2)
@@ -474,21 +474,15 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                 /* if we did not advance out of detection state... */
                 if (state < 2) {
-                    /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
-                    dechirp(S, L, H, fft_input, window, basebanded_ring, isample_decimated - S * L, advances, 0, 0.0f);
-
-                    /* do an fft of the dechirped symbol frame */
-                    fft_evaluate_forward(fft_output, fft_input, plan);
+                    /* retrieve one chirp worth of stuff from the buffer, de-upsweep it, and fourier transform it */
+                    dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - S * L, advances, 0, 0.0f);
 
                     /* find index (incl estimating the fractional part) of the loudest fft bin */
                     prior_upsweeps[iframe % 4] = circular_argmax_of_complex_vector(S, fft_output).value;
                 }
             } else {
                 /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
-                dechirp(S, L, H, fft_input, window, basebanded_ring, isample_decimated - S * L, advances, 0, freq_offset);
-
-                /* do an fft of the dechirped symbol frame */
-                fft_evaluate_forward(fft_output, fft_input, plan);
+                dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - S * L, advances, 0, freq_offset);
 
                 /* find index (incl estimating the fractional part) of the loudest fft bin */
                 const struct argmax argmax = circular_argmax_of_complex_vector(S, fft_output);
