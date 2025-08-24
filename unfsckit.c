@@ -477,6 +477,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                 /* find index (incl estimating the fractional part) of the loudest fft bin */
                 prior_upsweeps[iframe % 4] = circular_argmax_of_complex_vector(S, fft_output).value;
+                iframe++;
             } else {
                 /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
                 dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - S * L, advances, 0, freq_offset);
@@ -549,7 +550,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     }
                 }
             }
-            iframe++;
         }
 
     destroy_planned_forward_fft(plan);
