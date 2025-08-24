@@ -296,7 +296,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     size_t isample_decimated = 0, isample_decimated_next_frame = S * L;
 
     /* for estimating the absolute timing of things to pass downstream */
-    size_t isample_decimated_preamble_start = 0;
+    size_t critical_sample_preamble_start = 0;
 
     /* after preamble detection, this will hold a residual (circular) shift, in units
      of bins, that should be applied to the fft argmax to get the encoded value */
@@ -463,11 +463,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         dprintf(2, "%s: frame %u: preamble detected, data frame starts at time %zu, implied carrier offset %.2f Hz\r\n",
                                 __func__, iframe, isample_decimated_next_frame - S * L, (freq_offset * bandwidth / S));
 
-                    isample_decimated_preamble_start = (isample_decimated_next_frame - 7 * S * L + L / 2) / L - 1;
+                    critical_sample_preamble_start = (isample_decimated_next_frame - 7 * S * L + L / 2) / L - 1;
 
                     if (preamble_detected_func)
                     /* estimate the absolute time of the start of the first chirp, in units of 1/bandwidth */
-                        preamble_detected_func(isample_decimated_preamble_start, preamble_detected_ctx);
+                        preamble_detected_func(critical_sample_preamble_start, preamble_detected_ctx);
 
                     state++;
                 } while(0);
@@ -540,7 +540,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                         byte, hash_low_bits, byte == hash_low_bits ? "pass" : "fail");
 
                                 if (byte == hash_low_bits)
-                                    packet_success_function(bytes_expected, bytes, isample_decimated_preamble_start, put_ctx);
+                                    packet_success_function(bytes_expected, bytes, critical_sample_preamble_start, put_ctx);
 
                                 /* reset and wait for next packet */
                                 state = 0;
