@@ -430,7 +430,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                     /* TODO: freq_offset should be corrected for time residual error */
 
-                    if (verbose >= 2)
+                    if (verbose >= 1)
                         dprintf(2, "%s: frame %u: time offset %.3f bins (%.3f samples), freq offset %.3f bins (%.3f Hz)\r\n", __func__, iframe,
                                 time_offset, time_offset * L, freq_offset, freq_offset * bandwidth / S);
 
@@ -592,7 +592,7 @@ static void write_payload_to_stdout(const size_t B, const unsigned char * bytes,
 
 static void preamble_detected(const size_t it, void * ctx) {
     const float bandwidth = *(float *)ctx;
-    dprintf(2, "%s: assumed start time %.3f s into timeseries\r\n", __func__, it / bandwidth);
+    dprintf(2, "%s: assumed start time %.3f s into timeseries (%zu critical samples)\r\n", __func__, it / bandwidth, it);
 }
 
 #include <unistd.h>
