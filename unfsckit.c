@@ -448,6 +448,19 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__,
                                 iframe, argmax_dn_test.value + shift_unquantized / (float)L, argmax_dn_prior.value - freq_offset);
 
+                    /* validate that the last preamble upsweep was in fact an upsweep */
+                    dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - 3 * S * L - shift, advances, 0, freq_offset);
+                    const struct argmax argmax_up_before_that = circular_argmax_of_complex_vector(S, fft_output);
+
+                    dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - 3 * S * L - shift, advances, 1, freq_offset);
+                    const struct argmax argmax_dn_before_that = circular_argmax_of_complex_vector(S, fft_output);
+
+                    /* tested interval less likely to be an upsweep than a downsweep */
+                    if (argmax_up_before_that.power <= argmax_dn_before_that.power) break;
+
+                    /* if it was an upsweep with the expected shift... */
+                    if (fabsf(remainderf(argmax_up_before_that.value, S)) >= 1.0f) break;
+
                     /* note: we do not refine the residual using the first of the
                      two downchirps as it is contaminated by filter ringing */
 
@@ -467,10 +480,6 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         preamble_detected_func(critical_sample_preamble_start, preamble_detected_ctx);
 
                     demodulator_state = 0;
-                    /* reset the detector, which reimposes the initial lockout period,
-                     which helps ensure that the preamble detector does not re-trigger on
-                     the same preamble on a later frame. TODO: get good instead */
-                    detector_state = 0;
                     isample_decimated_next_demodulator_frame = isample_decimated + S * L - shift;
                 } while(0);
 
