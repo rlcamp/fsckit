@@ -289,11 +289,13 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
     /* index of what stage of the state machine we are in, so that we can structure this
      as a simple nonthreatening function call from the perspective of calling code */
-    unsigned char state = 0;
+    unsigned char detector_state = 0;
+    unsigned char demodulator_state = (unsigned char)-1;
 
     /* writer and reader cursors for input ring buffer. the reader shifts its own cursor
      around during preamble detection to align with symbol frames */
-    size_t isample_decimated = 0, isample_decimated_next_frame = S * L;
+    size_t isample_decimated = 0, isample_decimated_next_detector_frame = S * L;
+    size_t isample_decimated_next_demodulator_frame;
 
     /* for estimating the absolute timing of things to pass downstream */
     size_t critical_sample_preamble_start = 0;
@@ -301,6 +303,8 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
     /* after preamble detection, this will hold a residual (circular) shift, in units
      of bins, that should be applied to the fft argmax to get the encoded value */
     float freq_offset = 0;
+
+    float tracked_freq_offset = 0;
 
     /* counters needed by data states */
     unsigned bytes_expected = 0, ibyte = 0;
@@ -343,23 +347,14 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
             /* store the basebanded filtered decimated samples in a ring buffer */
             basebanded_ring[(isample_decimated++) % H] = filtered;
 
-            /* wait for the buffer to be aligned with the next expected frame */
-            if (isample_decimated != isample_decimated_next_frame) continue;
-            isample_decimated_next_frame += S * L;
-
-            if (0 == state) {
+            if (0 == detector_state) {
                 /* resetting everything */
                 iframe_at_last_reset = iframe;
-                freq_offset = 0;
-                ih_bit = 0;
-                decoded_bits = 0;
-                decoded_bits_filled = 0;
-                ibyte = 0;
-                state++;
+                detector_state++;
             }
 
             /* if listening for preamble... */
-            if (1 == state) {
+            if (1 == detector_state && isample_decimated_next_detector_frame == isample_decimated) {
                 /* apply a bunch of criteria for advancing out of preamble detection state */
                 do {
                     const float ref = prior_upsweeps[(iframe + 1) % 4];
@@ -390,9 +385,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                     if (verbose >= 2)
                         dprintf(2, "%s: frame %u: decimated sample %zu, considering whether %zu to %zu contains a downsweep\r\n", __func__,
-                            iframe, isample_decimated,
-                            isample_decimated - S * L - S * L / 2 - shift_midpoint,
-                            isample_decimated - S * L - S * L / 2 + S * L - shift_midpoint);
+                                iframe, isample_decimated,
+                                isample_decimated - S * L - S * L / 2 - shift_midpoint,
+                                isample_decimated - S * L - S * L / 2 + S * L - shift_midpoint);
 
                     dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 0, -0.5f * S - shift_midpoint / (float)L);
                     const struct argmax argmax_up_test = circular_argmax_of_complex_vector(S, fft_output);
@@ -452,7 +447,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     if (verbose >= 2)
                         dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__,
                                 iframe, argmax_dn_test.value + shift_unquantized / (float)L, argmax_dn_prior.value - freq_offset);
-                    isample_decimated_next_frame -= shift;
+                    isample_decimated_next_detector_frame -= shift;
 
                     /* note: we do not refine the residual using the first of the
                      two downchirps as it is contaminated by filter ringing */
@@ -467,7 +462,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     /* estimate the absolute time of the start of the first chirp, in units of 1/bandwidth */
                         preamble_detected_func(critical_sample_preamble_start, preamble_detected_ctx);
 
-                    state++;
+                    demodulator_state = 0;
+                    detector_state = (unsigned char)-1;
+                    isample_decimated_next_demodulator_frame = isample_decimated + S * L - shift;
                 } while(0);
 
                 /* retrieve one chirp worth of stuff from the buffer, de-upsweep it, and fourier transform it */
@@ -476,9 +473,21 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 /* find index (incl estimating the fractional part) of the loudest fft bin */
                 prior_upsweeps[iframe % 4] = circular_argmax_of_complex_vector(S, fft_output).value;
                 iframe++;
-            } else {
+                isample_decimated_next_detector_frame += S * L;
+            }
+
+            if (0 == demodulator_state) {
+                ih_bit = 0;
+                decoded_bits = 0;
+                decoded_bits_filled = 0;
+                ibyte = 0;
+                tracked_freq_offset = freq_offset;
+                demodulator_state++;
+            }
+
+            if (1 == demodulator_state && isample_decimated_next_demodulator_frame == isample_decimated) {
                 /* retrieve one chirp worth of stuff from the buffer, and de-upsweep it */
-                dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - S * L, advances, 0, freq_offset);
+                dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - S * L, advances, 0, tracked_freq_offset);
 
                 /* find index (incl estimating the fractional part) of the loudest fft bin */
                 const struct argmax argmax = circular_argmax_of_complex_vector(S, fft_output);
@@ -486,7 +495,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                 /* KNOB: scaling factor by which our running estimate of the residual error
                  is nudged by each new symbol. longer symbols want higher values of this
                  knob, as there are fewer update opportunities */
-                freq_offset += 0.25f * (argmax.value - lrintf(argmax.value));
+                tracked_freq_offset += 0.25f * (argmax.value - lrintf(argmax.value));
 
                 /* TODO: possibly update time alignment according to trend in residual */
 
@@ -514,7 +523,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                 if (bytes_expected > bytes_expected_max ||
                                     byte != len_hash) {
                                     dprintf(2, "%s: length failed check or length, resetting\r\n", __func__);
-                                    state = 0;
+                                    detector_state = 0;
+                                    isample_decimated_next_detector_frame = isample_decimated + S * L;
+                                    demodulator_state = (unsigned char)-1;
                                 } else {
                                     dprintf(2, "%s: reading %u bytes\r\n", __func__, bytes_expected);
 
@@ -539,7 +550,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                     packet_success_function(bytes_expected, bytes, critical_sample_preamble_start, put_ctx);
 
                                 /* reset and wait for next packet */
-                                state = 0;
+                                detector_state = 0;
+                                isample_decimated_next_detector_frame = isample_decimated + S * L;
+                                demodulator_state = (unsigned char)-1;
                             }
                             ibyte++;
                         }
@@ -547,7 +560,9 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         ih_bit = 0;
                     }
                 }
+                isample_decimated_next_demodulator_frame += S * L;
             }
+
         }
 
     destroy_planned_forward_fft(plan);
