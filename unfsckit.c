@@ -456,6 +456,11 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         dprintf(2, "%s: frame %u: preamble detected, data frame starts at time %zu, implied carrier offset %.2f Hz\r\n",
                                 __func__, iframe, isample_decimated, (freq_offset * bandwidth / S));
 
+                    if (demodulator_state != (unsigned char)-1) {
+                        dprintf(2, "warning: %s: detected another preamble during demodulation\r\n", __func__);
+                        break;
+                    }
+
                     critical_sample_preamble_start = (isample_decimated - shift - 6 * S * L + L / 2) / L - 1;
 
                     if (preamble_detected_func)
@@ -463,7 +468,10 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                         preamble_detected_func(critical_sample_preamble_start, preamble_detected_ctx);
 
                     demodulator_state = 0;
-                    detector_state = (unsigned char)-1;
+                    /* reset the detector, which reimposes the initial lockout period,
+                     which helps ensure that the preamble detector does not re-trigger on
+                     the same preamble on a later frame. TODO: get good instead */
+                    detector_state = 0;
                     isample_decimated_next_demodulator_frame = isample_decimated + S * L - shift;
                 } while(0);
 
