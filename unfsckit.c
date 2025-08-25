@@ -71,12 +71,12 @@ static void dechirped_fft(const size_t S, const size_t L, const size_t H,
     float complex carrier = 1.0f;
 
     /* TODO: optimize this */
-    const float complex extra = cosisinf(2.0f * (float)M_PI * freq_offset / S);
+    const float complex extra = cosisinf(-2.0f * (float)M_PI * freq_offset / S);
 
     for (size_t is = 0; is < S; is++) {
         /* TODO: document this indexing math wow */
-        fft_input[is] = history[(is * L + ih) % H] * (down ? carrier : conjf(carrier)) * window[is];
-        carrier = renormalize(carrier * advances[is % S] * (down ? conjf(extra) : extra));
+        fft_input[is] = history[(is * L + ih) % H] * carrier * window[is];
+        carrier = renormalize(carrier * (down ? advances[is % S] : conjf(advances[is % S])) * extra);
     }
 
     fft_evaluate_forward(fft_output, fft_input, plan);
