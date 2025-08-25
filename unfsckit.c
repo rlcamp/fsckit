@@ -76,7 +76,7 @@ static void dechirped_fft(const size_t S, const size_t L, const size_t H,
     for (size_t is = 0; is < S; is++) {
         /* TODO: document this indexing math wow */
         fft_input[is] = history[(is * L + ih) % H] * (down ? carrier : conjf(carrier)) * window[is];
-        carrier = renormalize(carrier * advances[is % S] * extra);
+        carrier = renormalize(carrier * advances[is % S] * (down ? conjf(extra) : extra));
     }
 
     fft_evaluate_forward(fft_output, fft_input, plan);
@@ -389,10 +389,10 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                                 isample_decimated - S * L - S * L / 2 - shift_midpoint,
                                 isample_decimated - S * L - S * L / 2 + S * L - shift_midpoint);
 
-                    dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 0, -0.5f * S - shift_midpoint / (float)L);
+                    dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 0, 0.5f * S + shift_midpoint / (float)L);
                     const struct argmax argmax_up_test = circular_argmax_of_complex_vector(S, fft_output);
 
-                    dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 1, -0.5f * S - shift_midpoint / (float)L);
+                    dechirped_fft(S, L, H, fft_output, fft_input, plan, window, basebanded_ring, isample_decimated - S * L - S * L / 2 - shift_midpoint, advances, 1, 0.5f * S + shift_midpoint / (float)L);
                     const struct argmax argmax_dn_test = circular_argmax_of_complex_vector(S, fft_output);
 
                     /* tested interval less likely to be a downsweep than an upsweep */
@@ -442,7 +442,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
                     if (argmax_dn_prior.power <= argmax_up_prior.power) break;
 
                     /* if it was a downsweep with the expected shift... */
-                    if (fabsf(remainderf(argmax_dn_test.value + shift_unquantized / (float)L - argmax_dn_prior.value + freq_offset, S)) >= 1.0f) break;
+                    if (fabsf(remainderf(argmax_dn_prior.value, S)) >= 1.0f) break;
 
                     if (verbose >= 2)
                         dprintf(2, "%s: frame %u: current and previous frame both downsweeps %.3f %.3f\r\n", __func__,
