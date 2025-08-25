@@ -453,7 +453,7 @@ void unfsckit(const int16_t * (* get_next_sample_func)(const int16_t **, size_t 
 
                     if (verbose >= 1)
                         dprintf(2, "%s: frame %u: preamble detected, data frame starts at time %zu, implied carrier offset %.2f Hz\r\n",
-                                __func__, iframe, isample_decimated, (freq_offset * bandwidth / S));
+                                __func__, iframe, isample_decimated - shift, (freq_offset * bandwidth / S));
 
                     if (demodulator_state != (unsigned char)-1) {
                         dprintf(2, "warning: %s: detected another preamble during demodulation\r\n", __func__);
