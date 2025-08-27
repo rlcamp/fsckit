@@ -53,3 +53,15 @@ void destroy_planned_forward_fft(struct planned_forward_fft * plan);
 void destroy_planned_inverse_fft(struct planned_inverse_fft * plan);
 void destroy_planned_real_fft(struct planned_real_fft * plan);
 void destroy_planned_real_inverse_fft(struct planned_real_inverse_fft * plan);
+
+void fft_recursive_3(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan);
+void fft_recursive_4(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan);
+void fft_recursive_5(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan);
+void fft_recursive_7(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan);
+void fft_recursive_8(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan);
+
+void fft_recursive_by_2(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan);
+void fft_recursive_by_3(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan);
+void fft_recursive_by_4(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan);
+void fft_recursive_by_5(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan);
+void fft_recursive_by_7(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan);

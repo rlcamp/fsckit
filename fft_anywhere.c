@@ -124,27 +124,27 @@ static void fft4(float complex * restrict const out, const size_t stride, const 
     out[3 * stride] = scratch1 - scratch3;
 }
 
-static void fft_recursive_3(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) { (void)plan;
+void fft_recursive_3(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) { (void)plan;
     /* perform a three-point dft within the recursive framework */
     dft3(out, 1, in[0], in[istride], in[2 * istride]);
 }
 
-static void fft_recursive_4(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) { (void)plan;
+void fft_recursive_4(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) { (void)plan;
     /* perform a four-point fft within the recursive framework */
     fft4(out, 1, in[0], in[istride], in[2 * istride], in[3 * istride]);
 }
 
-static void fft_recursive_5(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) { (void)plan;
+void fft_recursive_5(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) { (void)plan;
     /* perform a five-point dft within the recursive framework */
     dft5(out, 1, in[0], in[istride], in[2 * istride], in[3 * istride], in[4 * istride]);
 }
 
-static void fft_recursive_7(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) { (void)plan;
+void fft_recursive_7(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) { (void)plan;
     /* perform a five-point dft within the recursive framework */
     dft7(out, 1, in[0], in[istride], in[2 * istride], in[3 * istride], in[4 * istride], in[5 * istride], in[6 * istride]);
 }
 
-static void fft_recursive_8(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) { (void)plan;
+void fft_recursive_8(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) { (void)plan;
     /* perform an eight-point fft within the recursive framework */
     const float complex in0 = in[0], in1 = in[istride], in2 = in[2 * istride], in3 = in[3 * istride], in4 = in[4 * istride], in5 = in[5 * istride], in6 = in[6 * istride], in7 = in[7 * istride];
 
@@ -184,7 +184,7 @@ static void fft_recursive_8(float complex * restrict const out, const float comp
     out[7] = c3 - c7;
 }
 
-static void fft_recursive_by_2(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) {
+void fft_recursive_by_2(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) {
     const size_t T = plan->T;
 
     /* perform two ffts of length T / 2 */
@@ -201,7 +201,7 @@ static void fft_recursive_by_2(float complex * restrict const out, const float c
     }
 }
 
-static void fft_recursive_by_3(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft* const plan) {
+void fft_recursive_by_3(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft* const plan) {
     const size_t T = plan->T;
 
     /* perform three ffts of length T / 3 */
@@ -217,7 +217,7 @@ static void fft_recursive_by_3(float complex * restrict const out, const float c
              out[it + 2 * (T / 3)] * plan->twiddles[2 * it + 1]);
 }
 
-static void fft_recursive_by_4(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) {
+void fft_recursive_by_4(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) {
     const size_t T = plan->T;
 
     /* perform four ffts of length T / 4 */
@@ -237,7 +237,7 @@ static void fft_recursive_by_4(float complex * restrict const out, const float c
              out[it + 3 * (T / 4)] * plan->twiddles[3 * it + 2]);
 }
 
-static void fft_recursive_by_5(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) {
+void fft_recursive_by_5(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) {
     const size_t T = plan->T;
 
     /* perform five ffts of length T / 5 */
@@ -257,7 +257,7 @@ static void fft_recursive_by_5(float complex * restrict const out, const float c
              out[it + 4 * (T / 5)] * plan->twiddles[4 * it + 3]);
 }
 
-static void fft_recursive_by_7(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) {
+void fft_recursive_by_7(float complex * restrict const out, const float complex * restrict const in, const size_t istride, const struct planned_forward_fft * const plan) {
     const size_t T = plan->T;
 
     /* perform seven ffts of length T / 7 */
